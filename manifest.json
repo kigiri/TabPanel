@@ -1,12 +1,26 @@
 {
   "manifest_version": 2,
 
-  "name": "TabPanel",
+  "name": "Tab Panel",
+  "short_name": "TabPanel",
   "description": "This extension allow you to switch tab easly.",
-  "version": "0.1",
+  "version": "0.1.0",
 
   "permissions": [
+    "tabs"
   ],
+  "commands": {
+    "_execute_browser_action": {
+      "suggested_key": {
+        "default": "Alt+P",
+        "windows": "Alt+P",
+        "chromeos": "Alt+P",
+        "linux": "Alt+P",
+        "mac": "Alt+P"
+      }
+    }
+  },
+  "offline_enabled": true,
   "browser_action": {
     "default_icon": "icon.png",
     "default_popup": "popup.html"
