@@ -3,51 +3,54 @@
   <head>
     <title>TabPanel</title>
     <style>
+    body {
+      background: -webkit-linear-gradient(whitesmoke, white 18%);
+    }
     button {
-      width: 576px;
-      border-radius: 0px;
-      border: 1px solid #DFDFDF;
-      border-top-color: #FFFFFF;
-      border-left: none;
-      padding: 2px;
-      text-align: left;
-      white-space: nowrap;
       background-color: #F2F2F2;
+      border: 1px solid #DFDFDF;
+      border-left: none;
+      border-top-color: #FFFFFF;
+      border-radius: 0px;
       color: rgb(166, 166, 166);
       height: 46px;
+      padding: 2px;
       position: relative;
-    }
-    button, input {
+      text-align: left;
+      white-space: nowrap;
+      width: 576px;
       outline: none;
     }
     #list, input {
       border-radius: 2px;
     }
     input {
-      width: 595px;
-      height: 30px;
-      margin-bottom: 10px;
       border: 1px solid #DFDFDF;
-      padding: 5px;
+      box-shadow: 0px 0px 3px #EDEDED inset;
       box-sizing: border-box;
       font-size: 14px;
+      height: 30px;
+      margin-bottom: 10px;
+      outline: 1px solid white;
+      padding: 5px;
+      width: 595px;
     }
     #list {
+      border: 1px solid #DFDFDF;
       height: 520px;
       overflow-y: scroll;
-      border: 1px solid #DFDFDF;
     }
     .fav-icon {
+      background-position: center;
+      background-repeat: no-repeat;
+      background-size: contain;
       float: left;
-      width: 16px;
       height: 16px;
-      position: absolute;
-      top: 0;
       left: 0;
       margin: 14px;
-      background-repeat: no-repeat;
-      background-position: center;
-      background-size: contain;
+      position: absolute;
+      top: 0;
+      width: 16px;
     }
     span, h3 {
       margin: 0 0 0 42px;
@@ -55,9 +58,9 @@
       text-overflow: ellipsis;
     }
     h3 {
-      font-weight: normal;
-      font-size: 13px;
       color: black;
+      font-size: 13px;
+      font-weight: normal;
     }
     span {
       font-size: 12px;
