@@ -25,6 +25,7 @@ function loadTabs(tabs) {
 
 function tabsFilter(tab) {
   if (tab.selected) { return false; }
+  if (typeof tab.windowId === 'undefined') { return false; }
   return !(_opts.hideIncognito && tab.incognito);
 }
 
