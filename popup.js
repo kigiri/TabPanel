@@ -4,6 +4,7 @@ var _elem = document.all;
 var _asyncLoadState = 0;
 var _active = -1;
 var _previousTabId = -1;
+var _actions = [];
 // info on currentTab
 var _currentTab = null;
 var _opts = {
@@ -130,23 +131,31 @@ function setActive(idx) {
   scrollTo(btn);
 }
 
+// Chrome Tabs Actions
+function openActiveTab() {
+  var activeTab = _tabs[_active];
+  if (activeTab.windowId !== _currentTab.windowId) {    
+    chrome.windows.update(activeTab.windowId, { 'focused': true });
+    window.close();
+  }
+  chrome.tabs.update(activeTab.id, { 'active': true });
+}
+
 
 // Handle inputs
+_actions[13] = openActiveTab; // Key Enter
+_actions[40] = function () {  // key Down
+  setActive(_active + 1);
+};
+_actions[38] = function () {  // key Up
+  setActive(_active - 1);
+};
+
 _elem.search.onkeydown = function (e) {
   console.log(e);
-  switch (e.keyCode) {
-    case 38: handleKeyUp();   break; // key up
-    case 40: handleKeyDown(); break; // key down
-    default: break;
-  }
-}
-
-function handleKeyDown() {
-  setActive(_active + 1);
-}
-
-function handleKeyUp() {
-  setActive(_active - 1);
+  var fn = _actions[e.keyCode];
+  if (typeof fn !== 'function') { return; }
+  fn(e);
 }
 
 init();
