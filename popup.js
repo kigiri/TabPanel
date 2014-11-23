@@ -1,9 +1,11 @@
 // Cached Globals and Aliases
 var _tabs = [];
 var _elem = document.all;
-var _active = null;
+var _asyncLoadState = 0;
+var _active = -1;
+var _previousTab = -1;
 // info on currentTab
-var _currentWindow = null;
+var _currentTab = null;
 var _opts = {
   // Hide private navigation tabs form the results
   hideIncognito: true
@@ -12,9 +14,25 @@ var _opts = {
 // Activate focus on popup opening
 _elem.search.focus();
 
+
+function tryLoadTabs() {
+  if (_asyncLoadState === 1) {
+    chrome.tabs.query({}, loadTabs);
+    _asyncLoadState = 0;
+  } else {
+    _asyncLoadState++;
+  }
+}
+
 function setCurrent(tabs) {
-  _currentWindow = tabs[0].windowId;
-  chrome.tabs.query({}, loadTabs);
+  _currentTab = tabs[0];
+  tryLoadTabs();
+}
+
+function setPrevious(tab) {
+  console.log(tab);
+  _previousTab = tab;
+  tryLoadTabs();
 }
 
 function loadTabs(tabs) {
@@ -24,17 +42,19 @@ function loadTabs(tabs) {
 }
 
 function tabsFilter(tab) {
-  if (tab.selected) { return false; }
-  if (typeof tab.windowId === 'undefined') { return false; }
+  if (tab.id === _currentTab.id) { return false; }
+  if (typeof tab.id === 'undefined') { return false; }
   return !(_opts.hideIncognito && tab.incognito);
 }
 
 function tabsSort(a, b) {
+  if (a.id === _previousTab) { return -1; }
+  if (b.id === _previousTab) { return 1; }
   if (a.windowId !== b.windowId) {
-    if (a.windowId === _currentWindow) {
+    if (a.windowId === _currentTab.windowId) {
       return -1;
     }
-    if (b.windowId === _currentWindow) {
+    if (b.windowId === _currentTab.windowId) {
       return 1;
     }
     return a.windowId - b.windowId;
@@ -52,7 +72,7 @@ function genTab(tab, idx) {
 
   var favIcon = document.createElement('div');
   favIcon.className = 'fav-icon';
-  if (tab.windowId === _currentWindow) {
+  if (tab.windowId === _currentTab.windowId) {
     favIcon.className += ' current';
   }
   favIcon.style.backgroundImage = "url('" + tab.favIconUrl + "')";
@@ -74,6 +94,9 @@ function init() {
     'active': true
   };
   chrome.tabs.query(queryOptions, setCurrent);
+
+  //get previous tab from tabHistory
+  chrome.runtime.sendMessage({}, setPrevious);
 }
 
 // Scroll to element if necessary
@@ -97,7 +120,7 @@ function setActive(idx) {
 
   if (idx === _active) { return; }
 
-  if (_active !== null) {
+  if (_active !== -1) {
     _tabs[_active].buttonHTML.className = '';
   }
 

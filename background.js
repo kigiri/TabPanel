@@ -97,3 +97,28 @@ if (_opts.allWindows) {
   });
 }
 
+function getPreviousTab() {
+  if (_opts.allWindows) {
+    // return second last tab, the last one being the current.
+    var secondLastTab = _tabHistory[_tabHistory.length - 2];
+    if (typeof secondLastTab !== 'undefined') {
+      return secondLastTab.tabId;
+    }
+  } else {
+    var i = _tabHistory.length - 1;
+    var windowId = _tabHistory[i].windowId;
+    var tabId = _tabHistory[i].tabId;
+    for (i--; i >= 0; i--) {
+      var tab = _tabHistory[i];
+      if (tab.windowId === windowId && tab.tabId !== tabId) {
+        return tab.tabId;
+      }
+    }
+  }
+  return null;
+}
+
+// Send previous tab
+chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+  sendResponse(getPreviousTab());
+});
