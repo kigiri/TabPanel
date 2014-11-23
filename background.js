@@ -19,9 +19,8 @@ function toObj(obj, idx, value) {
 }
 
 function addToHistory(tabInfo) {
-  var historyLen = _tabHistory.length - 1;
-
   // always push the first element
+  var historyLen = _tabHistory.length - 1;
   if (historyLen < 0) {
     _tabHistory.push(tabInfo);
     return;
@@ -30,7 +29,6 @@ function addToHistory(tabInfo) {
   // the new tab should never be the same than the previous one, but in case...
   var lastTab = _tabHistory[historyLen];
   var tabId = tabInfo.tabId;
-
   if (lastTab.tabId === tabId) { return; }
 
   // In case of a simple swap between the 2 last tabs, avoid to push.
@@ -42,11 +40,11 @@ function addToHistory(tabInfo) {
     // check if tab was already in the history
     var idx = getTabIdx(tabId);
     if (idx !== -1) {
-      _tabHistory = _tabHistory.splice(idx, 1);
+      _tabHistory.splice(idx, 1);
     }
     _tabHistory.push(tabInfo);
   }
-  // Could filter history here if wierd stuff happen or if it gets to big
+  console.log(JSON.stringify(_tabHistory));
 }
 
 function getTabIdx(tabId) {

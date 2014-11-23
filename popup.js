@@ -3,7 +3,7 @@ var _tabs = [];
 var _elem = document.all;
 var _asyncLoadState = 0;
 var _active = -1;
-var _previousTab = -1;
+var _previousTabId = -1;
 // info on currentTab
 var _currentTab = null;
 var _opts = {
@@ -29,9 +29,8 @@ function setCurrent(tabs) {
   tryLoadTabs();
 }
 
-function setPrevious(tab) {
-  console.log(tab);
-  _previousTab = tab;
+function setPrevious(tabId) {
+  _previousTabId = tabId;
   tryLoadTabs();
 }
 
@@ -48,8 +47,8 @@ function tabsFilter(tab) {
 }
 
 function tabsSort(a, b) {
-  if (a.id === _previousTab) { return -1; }
-  if (b.id === _previousTab) { return 1; }
+  if (a.id === _previousTabId) { return -1; }
+  if (b.id === _previousTabId) { return 1; }
   if (a.windowId !== b.windowId) {
     if (a.windowId === _currentTab.windowId) {
       return -1;
