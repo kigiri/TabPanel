@@ -89,10 +89,12 @@ if (_opts.allWindows) {
     };
     chrome.tabs.query(queryInfo, function (tabs) {
       var tab = tabs[0];
-      addToHistory({
-        'tabId': tab.id,
-        'windowId': tab.windowId
-      });
+      if (!(/^chrome\-devtools\:/.test(tab.url) || tab.incognito)) {
+        addToHistory({
+          'tabId': tab.id,
+          'windowId': tab.windowId
+        });
+      }
     });
   });
 }
