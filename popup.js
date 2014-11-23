@@ -1,6 +1,7 @@
 // Cached Globals and Aliases
 var _tabs = [];
 var _elem = document.all;
+var _active = null;
 // info on currentTab
 var _currentWindow = null;
 var _opts = {
@@ -56,14 +57,14 @@ function genTab(tab, idx) {
   favIcon.style.backgroundImage = "url('" + tab.favIconUrl + "')";
 
   var button = document.createElement('button');
-  button.id = 'tab-' + idx + 1;
+  button.id = 'tab-' + idx;
+  button.dataset.id = tab.id;
+  button.dataset.index = tab.index;
   button.appendChild(favIcon);
   button.appendChild(title);
   button.appendChild(url);
-  button.dataset.id = tab.id;
-  button.dataset.index = tab.index;
-  tab.buttonHTML = button;
   _elem.list.appendChild(button);
+  tab.buttonHTML = button;
 }
 
 function init() {
@@ -72,6 +73,41 @@ function init() {
     'active': true
   };
   chrome.tabs.query(queryOptions, setCurrent);
+}
+
+// choose active element
+function setActive(idx) {
+  idx = Math.min(Math.max(0, idx), _tabs.length - 1);
+
+  if (idx === _active) { return; }
+
+  if (_active !== null) {
+    _tabs[_active].buttonHTML.className = '';
+  }
+
+  var btn = _tabs[idx].buttonHTML;
+  btn.className = 'active';
+  _active = idx;
+
+}
+
+
+// Handle inputs
+_elem.search.onkeydown = function (e) {
+  console.log(e);
+  switch (e.keyCode) {
+    case 38: handleKeyUp();   break; // key up
+    case 40: handleKeyDown(); break; // key down
+    default: break;
+  }
+}
+
+function handleKeyDown() {
+  setActive(_active + 1);
+}
+
+function handleKeyUp() {
+  setActive(_active - 1);
 }
 
 init();

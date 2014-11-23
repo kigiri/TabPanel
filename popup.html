@@ -9,8 +9,7 @@
     button {
       background-color: #F2F2F2;
       border: 1px solid #DFDFDF;
-      border-left: none;
-      border-top-color: #FFFFFF;
+      border-top-color: #FFF;
       border-radius: 0px;
       color: rgb(166, 166, 166);
       height: 46px;
@@ -18,8 +17,21 @@
       position: relative;
       text-align: left;
       white-space: nowrap;
-      width: 576px;
+      width: 577px;
       outline: none;
+    }
+    button:last-child {
+      border-bottom: none;
+    }
+    button:hover, button:focus {
+      background: -webkit-linear-gradient(rgb(239, 239, 239), rgb(237, 237, 237));
+      border-color: #D8D8D8;
+      border-top-color: #F9F9F9;
+    }
+    .active {
+      border-color: #ECECEC;
+      border-top-color: #FFF;
+      background-color: #FFF;
     }
     #list, input {
       border-radius: 2px;
@@ -37,6 +49,7 @@
     }
     #list {
       border: 1px solid #DFDFDF;
+      border-left: none;
       height: 520px;
       overflow-y: scroll;
     }
