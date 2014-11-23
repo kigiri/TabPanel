@@ -75,6 +75,21 @@ function init() {
   chrome.tabs.query(queryOptions, setCurrent);
 }
 
+// Scroll to element if necessary
+function scrollTo(elem) {
+  var l = _elem.list;
+  var min = l.scrollTop
+  var max = l.clientHeight + min;
+  var offset = elem.offsetTop;
+  var height = elem.offsetHeight;
+
+  if ((offset + height - 4) > max) {
+    l.scrollTop += (offset + height - 4) - max;
+  } else if (min && (offset - (height * 2) < min)) {
+    l.scrollTop += offset - (height * 2) - min;
+  }
+}
+
 // choose active element
 function setActive(idx) {
   idx = Math.min(Math.max(0, idx), _tabs.length - 1);
@@ -89,6 +104,7 @@ function setActive(idx) {
   btn.className = 'active';
   _active = idx;
 
+  scrollTo(btn);
 }
 
 
