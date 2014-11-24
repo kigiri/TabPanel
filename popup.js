@@ -259,7 +259,7 @@ function applyArrayToHTML(arr, baseStr) {
   var prevIdx = null;
   for (var i = 0; i < baseStr.length; i++) {
     var idx = arr[arr.indexOf(i)];
-    if (idx) {
+    if (typeof idx === 'number') {
       if (idx - 1 !== prevIdx) {
         strHTML += '<b>';
       }
