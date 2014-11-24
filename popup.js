@@ -257,19 +257,22 @@ function applyArrayToHTML(arr, baseStr) {
   if (!Array.isArray(arr) || !arr.length) { return baseStr; }
   var strHTML = '';
   var prevIdx = null;
+  var openTag = false;
   for (var i = 0; i < baseStr.length; i++) {
     var idx = arr[arr.indexOf(i)];
     if (typeof idx === 'number') {
       if (idx - 1 !== prevIdx) {
         strHTML += '<b>';
+        openTag = true;
       }
       prevIdx = idx;
-    } else if ((prevIdx !== null) && (prevIdx + 1 === i)) {
+    } else if ((prevIdx !== null) && openTag) {
       strHTML += '</b>';
+      openTag = false;
     }
     strHTML += baseStr[i];
   }
-  if (prevIdx === baseStr.length) {
+  if (openTag) {
     strHTML += '</b>';
   }
   return strHTML;
