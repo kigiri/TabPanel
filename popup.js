@@ -6,6 +6,7 @@ var _active = -1;
 var _prevTabId = -1;
 var _actions = [];
 var _prevInputValue = '';
+var _isSelecting = false;
 // info on currentTab
 var _currentTab = null;
 var _opts = {
@@ -37,7 +38,7 @@ function setPrevious(tabId) {
 }
 
 function loadTabs(tabs) {
-  _tabs = tabs.filter(tabsFilter);
+  _tabs = tabs.filter(initialTabsFilter);
   showDefaultTabs();
 }
 
@@ -52,11 +53,27 @@ function showMatchedTabs() {
   _tabs.forEach(genTab);
 }
 
-// filters and sort callbacks
-function tabsFilter(tab) {
+// filters, sort and map callbacks
+function initialTabsFilter(tab) {
   if (tab.id === _currentTab.id) { return false; }
   if (typeof tab.id === 'undefined') { return false; }
   return !(_opts.hideIncognito && tab.incognito);
+}
+
+function onlySelectedTabsFilter(tab) {
+  return !tab.isUserSelected;
+}
+
+function toTabIdArray(tab) {
+  return tab.id;
+}
+
+function filterAndDestroySelected(tab) {
+  if (tab.isUserSelected) {
+    _elem.list.removeChild(tab.buttonHTML);
+    return true;
+  }
+  return false;
 }
 
 function initialTabsSort(a, b) {
@@ -79,7 +96,7 @@ function scoreTabsSort(a, b) {
 }
 
 // Dom Stuff
-function genTab(tab, idx) {
+function createButtonHTML(tab, idx) {
   var title = document.createElement('h3');
   title.innerHTML = tab.titleHTML || tab.title;
 
@@ -100,8 +117,15 @@ function genTab(tab, idx) {
   button.appendChild(favIcon);
   button.appendChild(title);
   button.appendChild(url);
-  _elem.list.appendChild(button);
-  tab.buttonHTML = button;
+  return button;
+}
+
+function genTab(tab, idx) {
+  if (!tab.buttonHTML) {
+    tab.buttonHTML = createButtonHTML(tab, idx);
+  }
+  if (tab.score === 0) { return; }
+  _elem.list.appendChild(tab.buttonHTML);
 }
 
 function cleanTabList() {
@@ -110,7 +134,6 @@ function cleanTabList() {
     l.removeChild(l.lastChild);
   }
 }
-
 
 // Start it all !
 function init() {
@@ -249,17 +272,88 @@ function openActiveTab() {
   chrome.tabs.update(activeTab.id, { 'active': true });
 }
 
+function closeTabs(tabs) {
+  chrome.tabs.remove(tabs.map(toTabIdArray));
+};
+
+// Handle Select Actions
+function getAllSelectedTabs() {
+  return _tabs.filter(onlySelectedTabsFilter);
+}
+
+function closeSelectedTabs() {
+  var selectedTabs = getAllSelectedTabs();
+
+  closeTabs(selectedTabs);
+  _tabs = _tabs.filter(filterAndDestroySelected);
+  if (_prevInputValue.length) {
+    refreshInputMatching();
+  } else {
+    showDefaultTabs();
+  }
+}
+
+function moveSelectedTabs() {
+  // Move tabs to a new or existing window
+}
+
+function unselectTab(tab) {
+  tab.isUserSelected = false;
+}
+
+function unselectAllTabs() {
+  _tabs.forEach(unselectTab);
+  _isSelecting = false;
+}
+
+function toggleSelectActiveTab() {
+  var activeTab = _tabs[_active];
+  var favIcon = activeTab.buttonHTML.firstChild;
+  if (activeTab.isUserSelected) {
+    activeTab.isUserSelected = true;
+    favIcon.className = 'fav-icon selected';
+  } else {
+    activeTab.isUserSelected = false;
+    favIcon.className = 'fav-icon';
+  }
+
+  // this if / else if is a bit wierd
+  // it's so i call getAllSelectedTabs() only if really needed
+  if (_isSelecting) {
+    if (getAllSelectedTabs().length) {
+      _isSelecting = false;
+    }
+  } else if (activeTab.isUserSelected || getAllSelectedTabs().length) {
+    _isSelecting = true;
+  }
+}
+
 // Update routine
 function update() {
   var input = _elem.search;
   if (_prevInputValue !== input.value) {
     _prevInputValue = input.value;
-    refreshFuzzyMatching(_prevInputValue);
+    refreshInputMatching(_prevInputValue.toLowerCase());
   }
 }
 
 // Handle inputs
+_actions[7]  = function (e) { // Key Tab
+  e.preventDefault();
+  e.stopPropagation();
+  toggleSelectActiveTab();
+};
 _actions[13] = openActiveTab; // Key Enter
+_actions[27] = function (e) { // Key esc
+  e.preventDefault();
+  e.stopPropagation();
+};
+_actions[87] = function (e) { // Key W
+  if (e.ctrlKey) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+};
 _actions[40] = function () {  // key Down
   setActive(_active + 1);
 };
