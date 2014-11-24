@@ -13,20 +13,33 @@
       border-radius: 0px;
       color: rgb(166, 166, 166);
       height: 46px;
+      margin-left: -1px;
       padding: 2px;
       position: relative;
       text-align: left;
       white-space: nowrap;
-      width: 577px;
+      width: 578px;
       outline: none;
     }
     button:last-child {
       border-bottom: none;
+      box-shadow: 0px 6px 26px -16px #333;
     }
     button:hover, button:focus {
       background: -webkit-linear-gradient(rgb(239, 239, 239), rgb(237, 237, 237));
       border-color: #D8D8D8;
       border-top-color: #F9F9F9;
+    }
+    button i {
+      color: rgb(153, 165, 202);
+      font-style: normal;
+      position: relative;
+    }
+    button i::after {
+      position: absolute;
+      content: '';
+      background: -webkit-linear-gradient(white, transparent);
+      z-index: 999;
     }
     .active {
       border-color: #ECECEC;
@@ -49,9 +62,9 @@
     }
     #list {
       border: 1px solid #DFDFDF;
-      border-left: none;
       height: 520px;
       overflow-y: scroll;
+      background-color: rgb(224, 224, 224);
     }
     .fav-icon {
       background-position: center;
@@ -65,11 +78,19 @@
       top: 0;
       width: 16px;
     }
+    .fav-icon.current, .fav-icon.selected {
+      outline: 1px dotted;
+      outline-offset: 8px;
+    }
     .fav-icon.current {
       background-color: rgba(255, 255, 255, 0.8);
       box-shadow: 0px 0px 15px 5px rgba(255, 255, 255, 0.8);
-      outline: 1px dotted rgb(210, 210, 210);
-      outline-offset: 8px;
+      outline-color: rgb(210, 210, 210);
+    }
+    .fav-icon.selected {
+      background-color: rgb(201, 233, 255);
+      box-shadow: 0px 0px 15px 5px rgb(201, 233, 255);
+      outline-color: rgb(81, 141, 221);
     }
     span, h3 {
       margin: 0 0 0 42px;

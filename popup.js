@@ -39,29 +39,26 @@ function setPrevious(tabId) {
 
 function loadTabs(tabs) {
   _tabs = tabs.filter(initialTabsFilter);
-  showDefaultTabs();
+  _tabs.forEach(genTab);
+  showTabs(initialTabsSort);
 }
 
 // Generate tabs
-function showDefaultTabs() {
-  _tabs.sort(initialTabsSort);
-  _tabs.forEach(genTab);
-}
-
-function showMatchedTabs() {
-  _tabs.sort(scoreTabsSort);
-  _tabs.forEach(genTab);
+function showTabs(sortCallback) {
+  _tabs.sort(sortCallback);
+  appendAllTabs(_tabs, sortCallback);
 }
 
 // filters, sort and map callbacks
 function initialTabsFilter(tab) {
-  if (tab.id === _currentTab.id) { return false; }
-  if (typeof tab.id === 'undefined') { return false; }
+  if ((tab.id === _currentTab.id) || (typeof tab.id === 'undefined')) {
+    return false;
+  }
   return !(_opts.hideIncognito && tab.incognito);
 }
 
 function onlySelectedTabsFilter(tab) {
-  return !tab.isUserSelected;
+  return tab.isUserSelected;
 }
 
 function toTabIdArray(tab) {
@@ -71,9 +68,9 @@ function toTabIdArray(tab) {
 function filterAndDestroySelected(tab) {
   if (tab.isUserSelected) {
     _elem.list.removeChild(tab.buttonHTML);
-    return true;
+    return false;
   }
-  return false;
+  return true;
 }
 
 function initialTabsSort(a, b) {
@@ -96,12 +93,27 @@ function scoreTabsSort(a, b) {
 }
 
 // Dom Stuff
+function isMatched() {
+  return !!_prevInputValue;
+}
+
+function makeUrl(tab) {
+  if (isMatched()) {
+    return '<i>' + tab.hostnameHTML + tab.suffix + '</i>' + tab.pathnameHTML;
+  } else {
+    return '<i>' + tab.hostname + tab.suffix + '</i>' + tab.pathname;
+  }
+}
+
+function setDomAttrs(button, idx, title, url, tab) {
+  button.id = 'tab-' + idx;
+  title.innerHTML = isMatched() ? tab.titleHTML : tab.title;
+  url.innerHTML = makeUrl(tab);
+}
+
 function createButtonHTML(tab, idx) {
   var title = document.createElement('h3');
-  title.innerHTML = tab.titleHTML || tab.title;
-
   var url = document.createElement('span');
-  url.innerHTML = tab.urlHTML || tab.url;
 
   var favIcon = document.createElement('div');
   favIcon.className = 'fav-icon';
@@ -111,7 +123,6 @@ function createButtonHTML(tab, idx) {
   favIcon.style.backgroundImage = "url('" + tab.favIconUrl + "')";
 
   var button = document.createElement('button');
-  button.id = 'tab-' + idx;
   button.dataset.id = tab.id;
   button.dataset.index = tab.index;
   button.appendChild(favIcon);
@@ -120,12 +131,23 @@ function createButtonHTML(tab, idx) {
   return button;
 }
 
+// here I separate domain from url param to fine controle the score later
 function genTab(tab, idx) {
-  if (!tab.buttonHTML) {
-    tab.buttonHTML = createButtonHTML(tab, idx);
+  var url = new URL(tab.url);
+  tab.hostname = url.hostname.replace(/(^www\.|\..[^\.]+$)/g, '');
+  tab.suffix = url.hostname.match(/\..[^\.]+$/);
+  tab.pathname = (url.pathname + url.hash).replace(/\/$/, '');
+  tab.buttonHTML = createButtonHTML(tab, idx);
+}
+
+function appendAllTabs() {
+  var l = _elem.list;
+  for (var i = 0; i < _tabs.length; i++) {
+    var button = _tabs[i].buttonHTML;
+    var c = button.children;
+    setDomAttrs(button, i, c[1], c[2], _tabs[i]);
+    l.appendChild(button);
   }
-  if (tab.score === 0) { return; }
-  _elem.list.appendChild(tab.buttonHTML);
 }
 
 function cleanTabList() {
@@ -155,72 +177,102 @@ function init() {
 // tolerate repeating letters (ex: tollerate)
 // tolerate inverted letters (ex: toelrate)
 // tolerate typos (ex: tolerarte)
-function calcScore(str, patternChar, matchInfo) {
-  var matchedChar = str[matchInfo.strIdx];
+
+// TODO: try with objects instead of array for matchedIdx collection
+//  matchInfo structure :
+//  Number strIdx
+//  Number patternIdx
+//  Array  matchedIdx
+//  Number score
+function fuzzyMatch(str, pattern, matchInfo) {
+  var p = matchInfo.patternIdx;
+  var s = matchInfo.strIdx;
+  var prevCharScore = 0;
+  var matchedIdx = [];
   var score = 0;
+  var dirty = false;
+  while (p < pattern.length) {
+    if (s >= str.length) { dirty = true; break; }
+    var originalStrChar = str[s];
+    var strChar = originalStrChar.toLowerCase();
+    var patternChar = pattern[p];
+    if (strChar === patternChar) {
+      // Score calculation
+      var charScore = 2;
 
-  if (0) {// test for typos and repeats
-    score = 0;
-  } else {
-    score = 2; // minimum score if false
-  }
+      // bonus if capitalize
+      if (originalStrChar !== patternChar) {
+        charScore += 2;
+      }
 
-  // bonus if capitalize
-  if (matchedChar !== patternChar) {
-    score += 2;
-  }
+      // first char of the str
+      if (!s) {
+        charScore += 10;
+      } else {
+        // do all test that require backtracking here
+        // bonus if chain matches
+        // bonus if preceded by a separator (' -_/.{}()[]')
+      }
 
-  if (!matchInfo.strIdx) {
-    score += 10;
-  } else {
-    // do all test that require backtracking here
-    // bonus if chain matches
-    // bonus if preceded by a separator (' -_/.{}()[]')
-  }
+      // half score for inverts
+      if (0) {
+        charScore /= 2;
+      }
 
-  if (0) { // half score for inverts
-    score /= 2;
+      // test for typos and repeats
+      if (0) {
+        charScore = 0;
+      }
+
+      // add previous score
+      if (prevCharScore) {
+        charScore += ~~(prevCharScore / 2 + 0.5);
+      }
+
+      // we shoud spawn recursivly from here to test other possibilities
+      // use your imagination
+      // fuzzyMatch(str, pattern, {
+      //    'strIdx': s + 1,
+      //    'patternIdx': p,
+      //    'matchedIdx': matchedIdx.slice(),
+      //    'score': matchInfo.score + calcScore(str, patternChar, matchInfo)
+      //  })
+
+      // if it didn't found a better score...
+      matchedIdx.push(s);
+      prevCharScore = charScore;
+      score += charScore;
+
+      // scoring over, go to next char of the pattern
+      p++;
+    } else if (prevCharScore) {
+      prevCharScore = 0;
+    }
+    s++;
   }
-  return score;
+  return { 'score': score, 'matchedIdx': matchedIdx, 'dirty': dirty };
 }
 
-// UNTESTED !!
-function fuzzyMatch(str, pattern, matchInfo) {
-  for (var i = matchInfo.patternIdx + 1; i < pattern.length; i++) {
-    var alternativeMatches = [];
-    var patternChar = pattern[i];
-    var score = matchInfo.score;
-    var matchedIdx = matchInfo.matchedIdx;
-
-    for (var j = matchInfo.strIdx + 1; j < str.length; j++) {
-      var first = true;
-      var strChar = str[j];
-      if (strChar === ' ') { continue; }
-      if (strChar.toLowerCase() === patternChar) {
-        if (first) {
-          first = false;
-          matchedIdx.push(j);
-          score += calcScore(str, patternChar, matchInfo);
-        } else {
-          if (pattern.length < 3) { break; }
-          alternativeMatches.push({
-            'strIdx': j,
-            'patternIdx': i,
-            'matchedIdx': matchInfo.matchedIdx.slice(),
-            'score': matchInfo.score + calcScore(str, patternChar, matchInfo)
-          });
-        }
+function applyArrayToHTML(arr, baseStr) {
+  if (!Array.isArray(arr) || !arr.length) { return baseStr; }
+  var strHTML = '';
+  var prevIdx = null;
+  for (var i = 0; i < baseStr.length; i++) {
+    var idx = arr[arr.indexOf(i)];
+    if (idx) {
+      if (idx - 1 !== prevIdx) {
+        strHTML += '<b>';
       }
+      prevIdx = idx;
+    } else if ((prevIdx !== null) && (prevIdx + 1 === i)) {
+      strHTML += '</b>';
     }
-    for (var k = 0; k < alternativeMatches.length; k++) {
-      var altRes = fuzzyMatch(str, pattern, alternativeMatches[k]);
-      if (altRes.score < matchInfo.score) {
-        matchedIdx = altRes.matchedIdx;
-        score = altRes.score;
-      }
-    }
-    return { 'score': score, 'matchedIdx': matchedIdx };
+    strHTML += baseStr[i];
   }
+  if (prevIdx === baseStr.length) {
+    strHTML += '</b>';
+  }
+  return strHTML;
 }
 
 function fuzzyMatchString(tab, key, pattern) {
@@ -228,29 +280,32 @@ function fuzzyMatchString(tab, key, pattern) {
   var strHTML = [];
 
   var bestMatch = fuzzyMatch(str, pattern, {
-    'strIdx': -1,
-    'patternIdx': -1,
-    'matchedIdx': [], 
+    'strIdx': 0,
+    'patternIdx': 0,
+    'matchedIdx': [],
     'score': 0,
   });
   tab.score += bestMatch.score;
-  // tab[key + 'HTML'] = strHTML.join('');
+  tab[key + 'HTML'] = applyArrayToHTML(bestMatch.matchedIdx, str);
 }
 
 function refreshInputMatching(pattern) {
   cleanTabList();
   if (typeof pattern !== 'string' || !pattern.length) {
-    showDefaultTabs();
-    return;
+    return showTabs(initialTabsSort);
   }
   for (var i = _tabs.length - 1; i >= 0; i--) {
     var tab = _tabs[i];
     tab.score = 0;
+    fuzzyMatchString(tab, 'hostname', pattern);
+    //tab.score *= 3; // match in host should bd worth more
     fuzzyMatchString(tab, 'title', pattern);
-    tab.score *= 2;
-    fuzzyMatchString(tab, 'url', pattern);
+    fuzzyMatchString(tab, 'pathname', pattern);
+    // tab.score = 0;
+    tab.titleHTML = tab.score + ' - ' + tab.titleHTML;
+    // console.log(tab);
   }
-  showMatchedTabs();
+  showTabs(scoreTabsSort);
 }
 
 // Scroll to element if necessary
@@ -287,7 +342,7 @@ function setActive(idx) {
 // Chrome Tabs Actions
 function openActiveTab() {
   var activeTab = _tabs[_active];
-  if (activeTab.windowId !== _currentTab.windowId) {    
+  if (activeTab.windowId !== _currentTab.windowId) {
     chrome.windows.update(activeTab.windowId, { 'focused': true });
     window.close();
   }
@@ -311,7 +366,7 @@ function closeSelectedTabs() {
   if (_prevInputValue.length) {
     refreshInputMatching();
   } else {
-    showDefaultTabs();
+    showTabs(initialTabsSort);
   }
 }
 
@@ -330,24 +385,16 @@ function unselectAllTabs() {
 
 function toggleSelectActiveTab() {
   var activeTab = _tabs[_active];
+  if (!activeTab) { return; }
   var favIcon = activeTab.buttonHTML.firstChild;
   if (activeTab.isUserSelected) {
-    activeTab.isUserSelected = true;
-    favIcon.className = 'fav-icon selected';
-  } else {
     activeTab.isUserSelected = false;
-    favIcon.className = 'fav-icon';
+    favIcon.className = favIcon.className.replace(/( |)selected/, '');
+  } else {
+    activeTab.isUserSelected = true;
+    favIcon.className += ' selected';
   }
-
-  // this if / else if is a bit wierd
-  // it's so i call getAllSelectedTabs() only if really needed
-  if (_isSelecting) {
-    if (getAllSelectedTabs().length) {
-      _isSelecting = false;
-    }
-  } else if (activeTab.isUserSelected || getAllSelectedTabs().length) {
-    _isSelecting = true;
-  }
+  _isSelecting = !!(getAllSelectedTabs().length);
 }
 
 // Update routine
@@ -360,20 +407,22 @@ function update() {
 }
 
 // Handle inputs
-_actions[7]  = function (e) { // Key Tab
+_actions[9]  = function (e) { // Key Tab
+  if (_active === -1) { return; }
   e.preventDefault();
-  e.stopPropagation();
   toggleSelectActiveTab();
 };
 _actions[13] = openActiveTab; // Key Enter
 _actions[27] = function (e) { // Key esc
-  e.preventDefault();
-  e.stopPropagation();
+  if (_isSelecting) {
+    e.preventDefault();
+    unselectAllTabs();
+  }
 };
 _actions[87] = function (e) { // Key W
-  if (e.ctrlKey) {
+  if (_isSelecting) {
     e.preventDefault();
-    e.stopPropagation();
+    closeSelectedTabs();
   }
 };
 _actions[40] = function () {  // key Down
