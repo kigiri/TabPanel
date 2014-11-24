@@ -128,15 +128,82 @@ function init() {
 }
 
 // Fuzzy Search
-function refreshFuzzyMatching(pattern) {
+// ToDo :
+// tolerate repeating letters (ex: tollerate)
+// tolerate inverted letters (ex: toelrate)
+// tolerate typos (ex: tolerarte)
+function matchCharInStr(str, c) {
+  for (var i = 0; i < pattern.length; i++) {
+    var c = pattern[i];
+  }
+}
+
+
+function calcScore(matchInfo, patternChar, str) {
+  var matchedChar = str[matchInfo.strIdx];
+  if (matchInfo.strIdx)
+  // bonus if capitalize
+  // bonus if chain matches
+  // bonus if preceded by a separator (' -_/.{}()[]')
+  // no score for tolerated matches (typos, repeats)
+  // half score for inverts
+}
+
+// UNTESTED !!
+function fuzzyMatch(str, pattern, matchInfo) {
+  for (var i = matchInfo.patternIdx + 1; i < pattern.length; i++) {
+    var alt = [];
+    var patternChar = pattern[i];
+
+    for (var j = matchInfo.strIdx + 1; j < str.length; j++) {
+      var strChar = str[j];
+      if (strChar === ' ') { continue; }
+      if (strChar.toLowerCase() === patternChar) {
+        matchInfo.matched.push(alt);
+        matchInfo.score += calcScore(matchInfo, patternChar, str);
+        alt.push({
+          'strIdx': j,
+          'patternIdx': i,
+          'matched': matchInfo.matched.slice(),
+          'score': score
+        });
+      }
+    }
+    for (var i = alt.length - 1; i > 0; i--) { // compare to alternative scores
+      var altRes = fuzzyMatch(str, pattern, alt[i]);
+      if (altRes.score < matchInfo.score) {
+        matchInfo.matched = altRes.matched;
+        matchInfo.score = altRes.score;
+      }
+    }
+    return { 'score': matchInfo.score, 'matched' matchInfo.matched };
+  }
+}
+
+function fuzzyMatchString(tab, key, pattern) {
+  var str = tab[key];
+  var strHTML = [];
+
+  var bestMatch = fuzzyMatch(str, pattern, {
+    'strIdx': -1,
+    'patternIdx': -1,
+    'matched': [], 
+    'score': 0,
+  });
+  tab[key + 'HTML'] = strHTML.join('');
+}
+
+function refreshInputMatching(pattern) {
   cleanTabList();
   if (typeof pattern !== 'string' || !pattern.length) {
     showDefaultTabs();
     return;
   }
-
   for (var i = _tabs.length - 1; i >= 0; i--) {
-    // _tabs[i]
+    var tab = _tabs[i];
+    tab.score = tab.score || 0;
+    fuzzyMatchString(tab, 'title', pattern);
+    fuzzyMatchString(tab, 'url', pattern);
   }
   showMatchedTabs();
 }
@@ -161,7 +228,6 @@ function setActive(idx) {
   idx = Math.min(Math.max(0, idx), _tabs.length - 1);
 
   if (idx === _active) { return; }
-
   if (_active !== -1) {
     _tabs[_active].buttonHTML.className = '';
   }
