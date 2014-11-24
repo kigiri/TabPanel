@@ -86,13 +86,13 @@ function initialTabsSort(a, b) {
     if (b.windowId === _currentTab.windowId) {
       return 1;
     }
-    return a.windowId - b.windowId;
+    return b.windowId - a.windowId;
   }
   return a.index - b.index;
 }
 
 function scoreTabsSort(a, b) {
-  return a.score - b.score;
+  return b.score - a.score;
 }
 
 // Dom Stuff
@@ -155,51 +155,71 @@ function init() {
 // tolerate repeating letters (ex: tollerate)
 // tolerate inverted letters (ex: toelrate)
 // tolerate typos (ex: tolerarte)
-function matchCharInStr(str, c) {
-  for (var i = 0; i < pattern.length; i++) {
-    var c = pattern[i];
-  }
-}
-
-
-function calcScore(matchInfo, patternChar, str) {
+function calcScore(str, patternChar, matchInfo) {
   var matchedChar = str[matchInfo.strIdx];
-  if (matchInfo.strIdx)
+  var score = 0;
+
+  if (0) {// test for typos and repeats
+    score = 0;
+  } else {
+    score = 2; // minimum score if false
+  }
+
   // bonus if capitalize
-  // bonus if chain matches
-  // bonus if preceded by a separator (' -_/.{}()[]')
-  // no score for tolerated matches (typos, repeats)
-  // half score for inverts
+  if (matchedChar !== patternChar) {
+    score += 2;
+  }
+
+  if (!matchInfo.strIdx) {
+    score += 10;
+  } else {
+    // do all test that require backtracking here
+    // bonus if chain matches
+    // bonus if preceded by a separator (' -_/.{}()[]')
+  }
+
+  if (0) { // half score for inverts
+    score /= 2;
+  }
+  return score;
 }
 
 // UNTESTED !!
 function fuzzyMatch(str, pattern, matchInfo) {
   for (var i = matchInfo.patternIdx + 1; i < pattern.length; i++) {
-    var alt = [];
+    var alternativeMatches = [];
     var patternChar = pattern[i];
+    var score = matchInfo.score;
+    var matchedIdx = matchInfo.matchedIdx;
 
     for (var j = matchInfo.strIdx + 1; j < str.length; j++) {
+      var first = true;
       var strChar = str[j];
       if (strChar === ' ') { continue; }
       if (strChar.toLowerCase() === patternChar) {
-        matchInfo.matched.push(alt);
-        matchInfo.score += calcScore(matchInfo, patternChar, str);
-        alt.push({
-          'strIdx': j,
-          'patternIdx': i,
-          'matched': matchInfo.matched.slice(),
-          'score': score
-        });
+        if (first) {
+          first = false;
+          matchedIdx.push(j);
+          score += calcScore(str, patternChar, matchInfo);
+        } else {
+          if (pattern.length < 3) { break; }
+          alternativeMatches.push({
+            'strIdx': j,
+            'patternIdx': i,
+            'matchedIdx': matchInfo.matchedIdx.slice(),
+            'score': matchInfo.score + calcScore(str, patternChar, matchInfo)
+          });
+        }
       }
     }
-    for (var i = alt.length - 1; i > 0; i--) { // compare to alternative scores
-      var altRes = fuzzyMatch(str, pattern, alt[i]);
+    for (var k = 0; k < alternativeMatches.length; k++) {
+      var altRes = fuzzyMatch(str, pattern, alternativeMatches[k]);
       if (altRes.score < matchInfo.score) {
-        matchInfo.matched = altRes.matched;
-        matchInfo.score = altRes.score;
+        matchedIdx = altRes.matchedIdx;
+        score = altRes.score;
       }
     }
-    return { 'score': matchInfo.score, 'matched' matchInfo.matched };
+    return { 'score': score, 'matchedIdx': matchedIdx };
   }
 }
 
@@ -210,10 +230,11 @@ function fuzzyMatchString(tab, key, pattern) {
   var bestMatch = fuzzyMatch(str, pattern, {
     'strIdx': -1,
     'patternIdx': -1,
-    'matched': [], 
+    'matchedIdx': [], 
     'score': 0,
   });
-  tab[key + 'HTML'] = strHTML.join('');
+  tab.score += bestMatch.score;
+  // tab[key + 'HTML'] = strHTML.join('');
 }
 
 function refreshInputMatching(pattern) {
@@ -224,8 +245,9 @@ function refreshInputMatching(pattern) {
   }
   for (var i = _tabs.length - 1; i >= 0; i--) {
     var tab = _tabs[i];
-    tab.score = tab.score || 0;
+    tab.score = 0;
     fuzzyMatchString(tab, 'title', pattern);
+    tab.score *= 2;
     fuzzyMatchString(tab, 'url', pattern);
   }
   showMatchedTabs();
@@ -362,7 +384,6 @@ _actions[38] = function () {  // key Up
 };
 
 _elem.search.onkeydown = function (e) {
-  console.log(e);
   var fn = _actions[e.keyCode];
   if (typeof fn !== 'function') { return; }
   fn(e);

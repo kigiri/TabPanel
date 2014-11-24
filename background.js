@@ -44,7 +44,6 @@ function addToHistory(tabInfo) {
     }
     _tabHistory.push(tabInfo);
   }
-  console.log(JSON.stringify(_tabHistory));
 }
 
 function getTabIdx(tabId) {
