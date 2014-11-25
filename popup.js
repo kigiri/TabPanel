@@ -185,18 +185,29 @@ function init() {
 //  Array  matchedIdx
 //  Number score
 function fuzzyMatch(str, pattern, matchInfo) {
+  console.log(matchInfo);
   var p = matchInfo.patternIdx;
   var s = matchInfo.strIdx;
   var prevCharScore = 0;
-  var matchedIdx = [];
-  var score = 0;
-  var dirty = false;
+  var matchedIdx = matchInfo.matchedIdx;
+  var score = matchInfo.score;
+  var matchedLetter = -1;
   while (p < pattern.length) {
-    if (s >= str.length) { dirty = true; break; }
+    if (s >= str.length) {
+      if (matchedLetter === -1) {
+        break;
+      } else {
+        s = matchedLetter + 1;
+        matchedLetter === -1;
+        p++;
+      }
+    }
     var originalStrChar = str[s];
     var strChar = originalStrChar.toLowerCase();
     var patternChar = pattern[p];
+    var possibleMatches = [];
     if (strChar === patternChar) {
+      matchedLetter = s;
       // Score calculation
       var charScore = 2;
 
@@ -229,28 +240,24 @@ function fuzzyMatch(str, pattern, matchInfo) {
         charScore += ~~(prevCharScore / 2 + 0.5);
       }
 
-      // we shoud spawn recursivly from here to test other possibilities
-      // use your imagination
-      // fuzzyMatch(str, pattern, {
-      //    'strIdx': s + 1,
-      //    'patternIdx': p,
-      //    'matchedIdx': matchedIdx.slice(),
-      //    'score': matchInfo.score + calcScore(str, patternChar, matchInfo)
-      //  })
-
-      // if it didn't found a better score...
-      matchedIdx.push(s);
-      prevCharScore = charScore;
-      score += charScore;
-
+      possibleMatches.push(fuzzyMatch(str, pattern, {
+        'strIdx': s + 1,
+        'patternIdx': p + 1,
+        'matchedIdx': matchedIdx.slice(),
+        'score': score + charScore
+      }));
       // scoring over, go to next char of the pattern
-      p++;
     } else if (prevCharScore) {
       prevCharScore = 0;
     }
+    possibleMatches
     s++;
   }
-  return { 'score': score, 'matchedIdx': matchedIdx, 'dirty': dirty };
+  return {
+    'score': score,
+    'matchedIdx': matchedIdx,
+    'fullMatch': !(p < pattern.length)
+  };
 }
 
 function applyArrayToHTML(arr, baseStr) {
@@ -301,7 +308,7 @@ function refreshInputMatching(pattern) {
     var tab = _tabs[i];
     tab.score = 0;
     fuzzyMatchString(tab, 'hostname', pattern);
-    //tab.score *= 3; // match in host should bd worth more
+    tab.score *= 2; // match in host should bd worth more
     fuzzyMatchString(tab, 'title', pattern);
     fuzzyMatchString(tab, 'pathname', pattern);
     // tab.score = 0;
