@@ -232,6 +232,7 @@ function makeUrl(tab) {
 
 function setDomAttrs(button, idx, title, url, tab) {
   button.id = 'tab-' + idx;
+  button.className = '';
   title.innerHTML = isMatched() ? tab.titleHTML : tab.title;
   url.innerHTML = makeUrl(tab);
 }
@@ -276,6 +277,7 @@ function appendAllTabs() {
     setDomAttrs(button, i, c[1], c[2], _tabs[i]);
     l.appendChild(button);
   }
+  setActive(0);
 }
 
 function cleanTabList() {
@@ -403,6 +405,7 @@ function fuzzyMatchString(tab, key, pattern) {
 }
 
 function refreshInputMatching(pattern) {
+  pattern = normalize(pattern.toLowerCase());
   cleanTabList();
   if (typeof pattern !== 'string' || !pattern.length) {
     return showTabs(initialTabsSort);
@@ -438,7 +441,6 @@ function scrollTo(elem) {
 function setActive(idx) {
   idx = Math.min(Math.max(0, idx), _tabs.length - 1);
 
-  if (idx === _active) { return; }
   if (_active !== -1) {
     _tabs[_active].buttonHTML.className = '';
   }
@@ -474,11 +476,7 @@ function closeSelectedTabs() {
 
   closeTabs(selectedTabs);
   _tabs = _tabs.filter(filterAndDestroySelected);
-  if (_prevInputValue.length) {
-    refreshInputMatching();
-  } else {
-    showTabs(initialTabsSort);
-  }
+  refreshInputMatching(_prevInputValue);
 }
 
 function moveSelectedTabs() {
@@ -513,7 +511,7 @@ function update() {
   var input = _elem.search;
   if (_prevInputValue !== input.value) {
     _prevInputValue = input.value;
-    refreshInputMatching(normalize(_prevInputValue.toLowerCase()));
+    refreshInputMatching(_prevInputValue);
   }
 }
 
