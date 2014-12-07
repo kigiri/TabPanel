@@ -462,8 +462,8 @@ function openActiveTab() {
   chrome.tabs.update(activeTab.id, { 'active': true });
 }
 
-function closeTabs(tabs) {
-  chrome.tabs.remove(tabs.map(toTabIdArray));
+function closeTabs(tabs, cb) {
+  chrome.tabs.remove(tabs.map(toTabIdArray), cb);
 };
 
 // Handle Select Actions
@@ -474,9 +474,10 @@ function getAllSelectedTabs() {
 function closeSelectedTabs() {
   var selectedTabs = getAllSelectedTabs();
 
-  closeTabs(selectedTabs);
-  _tabs = _tabs.filter(filterAndDestroySelected);
-  refreshInputMatching(_prevInputValue);
+  closeTabs(selectedTabs, function () {
+    _tabs = _tabs.filter(filterAndDestroySelected);
+    refreshInputMatching(_prevInputValue);
+  });
 }
 
 function moveSelectedTabs() {
