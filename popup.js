@@ -548,4 +548,15 @@ _elem.search.onkeydown = function (e) {
   fn(e);
 }
 
+document.body.onclick = function (e) {
+  var elem = e.target;
+  if (elem.tagName !== "BUTTON") {
+    elem = elem.offsetParent;
+    if (elem.tagName !== "BUTTON") { return; }
+  }
+  var id = elem.dataset.id;
+  setActive(id);
+  openActiveTab();
+}
+
 init();
