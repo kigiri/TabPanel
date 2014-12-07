@@ -179,85 +179,56 @@ function init() {
 // tolerate typos (ex: tolerarte)
 
 // TODO: try with objects instead of array for matchedIdx collection
-//  matchInfo structure :
-//  Number strIdx
-//  Number patternIdx
-//  Array  matchedIdx
-//  Number score
-function fuzzyMatch(str, pattern, matchInfo) {
-  console.log(matchInfo);
-  var p = matchInfo.patternIdx;
-  var s = matchInfo.strIdx;
-  var prevCharScore = 0;
-  var matchedIdx = matchInfo.matchedIdx;
-  var score = matchInfo.score;
-  var matchedLetter = -1;
-  while (p < pattern.length) {
-    if (s >= str.length) {
-      if (matchedLetter === -1) {
-        break;
-      } else {
-        s = matchedLetter + 1;
-        matchedLetter === -1;
-        p++;
-      }
-    }
-    var originalStrChar = str[s];
-    var strChar = originalStrChar.toLowerCase();
-    var patternChar = pattern[p];
-    var possibleMatches = [];
-    if (strChar === patternChar) {
-      matchedLetter = s;
-      // Score calculation
-      var charScore = 2;
+function isSeparator(c) {
+  return (" _-()[]{}<>/\\.:;".indexOf(c) >= 0);
+}
 
-      // bonus if capitalize
-      if (originalStrChar !== patternChar) {
-        charScore += 2;
-      }
-
-      // first char of the str
-      if (!s) {
-        charScore += 10;
-      } else {
-        // do all test that require backtracking here
-        // bonus if chain matches
-        // bonus if preceded by a separator (' -_/.{}()[]')
-      }
-
-      // half score for inverts
-      if (0) {
-        charScore /= 2;
-      }
-
-      // test for typos and repeats
-      if (0) {
-        charScore = 0;
-      }
-
-      // add previous score
-      if (prevCharScore) {
-        charScore += ~~(prevCharScore / 2 + 0.5);
-      }
-
-      possibleMatches.push(fuzzyMatch(str, pattern, {
-        'strIdx': s + 1,
-        'patternIdx': p + 1,
-        'matchedIdx': matchedIdx.slice(),
-        'score': score + charScore
-      }));
-      // scoring over, go to next char of the pattern
-    } else if (prevCharScore) {
-      prevCharScore = 0;
-    }
-    possibleMatches
-    s++;
-  }
+function makeObject(score, matched, partial) {
   return {
     'score': score,
-    'matchedIdx': matchedIdx,
-    'fullMatch': !(p < pattern.length)
+    'matched': matched,
+    'partial': partial
   };
+}
+
+function fuzzyMatch(str, pattern, s, p, score, bonus, matched) {
+  // End of the pattern, successfull match
+  if (p >= pattern.length) {
+    return makeObject(score, matched, false);
+  }
+
+  // End of the string, failed to match all the pattern, apply penalty to score
+  if (s >= str.length) {
+    return makeObject(~~(score / 3), matched, true);
+  }
+
+  var c = str[s];
+  var lowerC = c.toLowerCase();
+  if (lowerC === pattern[p]) {
+    // Look a head to find best possible match
+    var altMatch = fuzzyMatch(str, pattern, s+1, p, score, 0, matched.slice());
+
+    // Store current match and calculate bonus
+    matched.push(s);
+
+    // Bonus for capitals
+    if (c !== lowerC) {
+      score += 2;
+    }
+    score += 1 + bonus;
+    bonus += 5;
+    var match = fuzzyMatch(str, pattern, s+1, p+1, score, bonus, matched);
+
+    // Return the best score
+    return match.score < altMatch.score ? altMatch : match;
+  } else {
+    // TODO: If we don't have any bonus, this could be an inverted type
+    // try to match previous char with current and current with previous
+
+    // If nothing matched, recalculate bonus
+    bonus = isSeparator(c) ? 3 : 0;
+    return fuzzyMatch(str, pattern, s+1, p, score, bonus, matched);
+  }
 }
 
 function applyArrayToHTML(arr, baseStr) {
@@ -287,16 +258,9 @@ function applyArrayToHTML(arr, baseStr) {
 
 function fuzzyMatchString(tab, key, pattern) {
   var str = tab[key];
-  var strHTML = [];
-
-  var bestMatch = fuzzyMatch(str, pattern, {
-    'strIdx': 0,
-    'patternIdx': 0,
-    'matchedIdx': [],
-    'score': 0,
-  });
+  var bestMatch = fuzzyMatch(str, pattern, 0, 0, 0, 5, []);
   tab.score += bestMatch.score;
-  tab[key + 'HTML'] = applyArrayToHTML(bestMatch.matchedIdx, str);
+  tab[key + 'HTML'] = applyArrayToHTML(bestMatch.matched, str);
 }
 
 function refreshInputMatching(pattern) {
