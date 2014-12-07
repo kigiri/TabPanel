@@ -417,7 +417,7 @@ function refreshInputMatching(pattern) {
     tab.score *= 2; // match in host should bd worth more
     fuzzyMatchString(tab, 'title', pattern);
     fuzzyMatchString(tab, 'pathname', pattern);
-    tab.titleHTML = tab.score + ' - ' + tab.titleHTML;
+    tab.titleHTML = tab.titleHTML;
   }
   showTabs(scoreTabsSort);
 }
