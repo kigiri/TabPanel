@@ -441,8 +441,9 @@ function scrollTo(elem) {
 function setActive(idx) {
   idx = Math.min(Math.max(0, idx), _tabs.length - 1);
 
-  if (_active !== -1) {
-    _tabs[_active].buttonHTML.className = '';
+  var lastTab = _tabs[_active];
+  if (lastTab !== undefined) {
+    lastTab.buttonHTML.className = '';
   }
 
   var btn = _tabs[idx].buttonHTML;
