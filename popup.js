@@ -261,9 +261,16 @@ function createButtonHTML(tab, idx) {
 // here I separate domain from url param to fine controle the score later
 function genTab(tab, idx) {
   var url = new URL(tab.url);
-  tab.hostname = url.hostname.replace(/(^www\.|\..[^\.]+$)/g, '');
-  tab.suffix = url.hostname.match(/\..[^\.]+$/);
-  tab.pathname = (url.pathname + url.hash).replace(/\/$/, '');
+  console.log(url.protocol);
+  if (!/^http/.test(url.protocol)) {
+    tab.hostname = (url.protocol === 'chrome:') ? url.origin : url.href;
+    tab.suffix = '';
+    tab.pathname = '';
+  } else {
+    tab.hostname = url.hostname.replace(/(^www\.|\..[^\.]+$)/g, '');
+    tab.suffix = url.hostname.match(/\..[^\.]+$/);
+    tab.pathname = (url.pathname + url.hash).replace(/\/$/, '');
+  }
   tab.buttonHTML = createButtonHTML(tab, idx);
   tab.hostnameNormalized = normalize(tab.hostname);
   tab.titleNormalized = normalize(tab.title);
