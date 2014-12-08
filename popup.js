@@ -170,6 +170,7 @@ function loadTabs(tabs) {
 
 // Generate tabs
 function showTabs(sortCallback) {
+  cleanTabList();
   _tabs.sort(sortCallback);
   appendAllTabs(_tabs, sortCallback);
 }
@@ -402,24 +403,27 @@ function fuzzyMatchString(tab, key, pattern) {
   var bestMatch = fuzzyMatch(str, pattern, 0, 0, 0, 5, []);
   tab.score += bestMatch.score;
   tab[key + 'HTML'] = applyArrayToHTML(bestMatch.matched, tab[key]);
+  return bestMatch.partial ? 1 : 0;
 }
 
 function refreshInputMatching(pattern) {
   pattern = normalize(pattern.toLowerCase());
-  cleanTabList();
   if (typeof pattern !== 'string' || !pattern.length) {
     return showTabs(initialTabsSort);
   }
+  var ret = 0;
   for (var i = _tabs.length - 1; i >= 0; i--) {
     var tab = _tabs[i];
     tab.score = 0;
-    fuzzyMatchString(tab, 'hostname', pattern);
+    ret += fuzzyMatchString(tab, 'hostname', pattern);
     tab.score *= 2; // match in host should bd worth more
-    fuzzyMatchString(tab, 'title', pattern);
-    fuzzyMatchString(tab, 'pathname', pattern);
+    ret += fuzzyMatchString(tab, 'title', pattern);
+    ret += fuzzyMatchString(tab, 'pathname', pattern);
     tab.titleHTML = tab.titleHTML;
   }
-  showTabs(scoreTabsSort);
+  if (ret) {
+    showTabs(scoreTabsSort);
+  }
 }
 
 // Scroll to element if necessary
