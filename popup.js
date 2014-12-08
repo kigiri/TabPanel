@@ -233,6 +233,7 @@ function makeUrl(tab) {
 
 function setDomAttrs(button, idx, title, url, tab) {
   button.id = 'tab-' + idx;
+  button.dataset.index = idx;
   button.className = '';
   title.innerHTML = isMatched() ? tab.titleHTML : tab.title;
   url.innerHTML = makeUrl(tab);
@@ -264,7 +265,6 @@ function createButtonHTML(tab, idx) {
 
   var button = document.createElement('button');
   button.dataset.id = tab.id;
-  button.dataset.index = tab.index;
   button.appendChild(favIcon);
   button.appendChild(title);
   button.appendChild(url);
@@ -579,8 +579,8 @@ document.body.onclick = function (e) {
     elem = elem.offsetParent;
     if (elem.tagName !== "BUTTON") { return; }
   }
-  var id = elem.dataset.id;
-  setActive(id);
+  var idx = elem.dataset.index;
+  setActive(idx);
   openActiveTab();
 }
 
