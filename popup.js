@@ -238,6 +238,12 @@ function setDomAttrs(button, idx, title, url, tab) {
   url.innerHTML = makeUrl(tab);
 }
 
+function handleFaviconLoadfailure(event) {
+  var t = event.target;
+  t.offsetParent.className += ' not-found';
+  t.remove()
+}
+
 function createButtonHTML(tab, idx) {
   var title = document.createElement('h3');
   var url = document.createElement('span');
@@ -247,7 +253,14 @@ function createButtonHTML(tab, idx) {
   if (tab.windowId === _currentTab.windowId) {
     favIcon.className += ' current';
   }
-  favIcon.style.backgroundImage = "url('" + tab.favIconUrl + "')";
+  if (tab.favIconUrl) {
+    var img = document.createElement('img');
+    img.src = tab.favIconUrl;
+    img.addEventListener("error", handleFaviconLoadfailure);
+    favIcon.appendChild(img);
+  } else {
+    favIcon.className += ' not-found';
+  }
 
   var button = document.createElement('button');
   button.dataset.id = tab.id;
