@@ -215,7 +215,10 @@ function initialTabsSort(a, b) {
 }
 
 function scoreTabsSort(a, b) {
-  return b.score - a.score;
+  if (b.score !== a.score) {
+    return b.score - a.score;
+  }
+  return initialTabsSort(a, b);
 }
 
 // Dom Stuff
