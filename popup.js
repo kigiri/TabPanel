@@ -249,9 +249,14 @@ function handleFaviconLoadfailure(event) {
 }
 
 function createButtonHTML(tab, idx) {
-  var title = document.createElement('h3');
-  var url = document.createElement('span');
+  var button = document.createElement('button');
+  button.dataset.id = tab.id;
+  button.appendChild(document.createElement('h3'));
+  button.appendChild(document.createElement('span'));
+  return button;
+}
 
+function generateFavicon(tab) {
   var favIcon = document.createElement('div');
   favIcon.className = 'fav-icon';
   if (tab.windowId === _currentTab.windowId) {
@@ -265,13 +270,7 @@ function createButtonHTML(tab, idx) {
   } else {
     favIcon.className += ' not-found';
   }
-
-  var button = document.createElement('button');
-  button.dataset.id = tab.id;
-  button.appendChild(favIcon);
-  button.appendChild(title);
-  button.appendChild(url);
-  return button;
+  tab.buttonHTML.appendChild(favIcon);
 }
 
 // here I separate domain from url param to fine controle the score later
@@ -298,10 +297,12 @@ function genTab(tab, idx) {
 function appendAllTabs() {
   var l = _elem.list;
   for (var i = 0; i < _tabs.length; i++) {
-    var button = _tabs[i].buttonHTML;
+    var tab = _tabs[i];
+    var button = tab.buttonHTML;
     var c = button.children;
-    setDomAttrs(button, i, c[1], c[2], _tabs[i]);
+    setDomAttrs(button, i, c[0], c[1], tab);
     l.appendChild(button);
+    setTimeout(generateFavicon, 20 * i, tab);
   }
   setActive(0);
 }
