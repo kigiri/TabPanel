@@ -435,7 +435,7 @@ function refreshInputMatching(pattern) {
   if (typeof pattern !== 'string' || !pattern.length) {
     return showTabs(initialTabsSort);
   }
-  pattern = normalize(pattern.toLowerCase()).replace(/-/, '');
+  pattern = normalize(pattern.toLowerCase()).replace(/-/g, '');
   var ret = 0;
   for (var i = _tabs.length - 1; i >= 0; i--) {
     var tab = _tabs[i];
