@@ -361,7 +361,7 @@ function makeObject(score, matched, partial) {
   };
 }
 
-function fuzzyMatch(str, pattern, s, p, score, bonus, matched) {
+function fuzzyMatch(str, pattern, s, p, score, bonus, matched, deepness) {
   // End of the pattern, successfull match
   if (p >= pattern.length) {
     return makeObject(score, matched, false);
@@ -376,7 +376,10 @@ function fuzzyMatch(str, pattern, s, p, score, bonus, matched) {
   var lowerC = c.toLowerCase();
   if (lowerC === pattern[p]) {
     // Look a head to find best possible match
-    var altMatch = fuzzyMatch(str, pattern, s+1, p, score, 0, matched.slice());
+    var altMatch;
+    if (deepness > 0) {
+      altMatch = fuzzyMatch(str, pattern, s+1, p, score, 0, matched.slice(), deepness - 1);
+    }
 
     // Store current match and calculate bonus
     matched.push(s);
@@ -387,17 +390,16 @@ function fuzzyMatch(str, pattern, s, p, score, bonus, matched) {
     }
     score += 1 + bonus;
     bonus += 5;
-    var match = fuzzyMatch(str, pattern, s+1, p+1, score, bonus, matched);
-
+    var match = fuzzyMatch(str, pattern, s+1, p+1, score, bonus, matched, deepness);
     // Return the best score
-    return match.score < altMatch.score ? altMatch : match;
+    return (!altMatch || altMatch.score <= match.score) ? match : altMatch;
   } else {
     // TODO: If we don't have any bonus, this could be an inverted type
     // try to match previous char with current and current with previous
 
     // If nothing matched, recalculate bonus
     bonus = c === '-' ? 3 : 0;
-    return fuzzyMatch(str, pattern, s+1, p, score, bonus, matched);
+    return fuzzyMatch(str, pattern, s+1, p, score, bonus, matched, deepness);
   }
 }
 
@@ -428,7 +430,7 @@ function applyArrayToHTML(arr, baseStr) {
 
 function fuzzyMatchString(tab, key, pattern) {
   var str = tab[key + 'Normalized'];
-  var bestMatch = fuzzyMatch(str, pattern, 0, 0, 0, 5, []);
+  var bestMatch = fuzzyMatch(str, pattern, 0, 0, 0, 8, [], 6);
   tab.score += bestMatch.score;
   tab[key + 'HTML'] = applyArrayToHTML(bestMatch.matched, tab[key]);
   return bestMatch.partial ? 1 : 0;
