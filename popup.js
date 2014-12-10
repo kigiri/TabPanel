@@ -244,6 +244,8 @@ function setDomAttrs(button, idx, title, url, tab) {
 
 function handleFaviconLoadfailure(event) {
   var t = event.target;
+  // Unset the favicon url for this elem to avoid trying to refetch the favicon
+  _tabs[t.offsetParent.parentNode.dataset.index].favIconUrl = '';
   t.offsetParent.className += ' not-found';
   t.remove()
 }
