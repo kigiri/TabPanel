@@ -562,11 +562,13 @@ _actions[87] = function (e) { // Key W
     closeSelectedTabs();
   }
 };
-_actions[40] = function () {  // key Down
+_actions[40] = function (e) {  // key Down
   setActive(_active + 1);
+  e.preventDefault();
 };
-_actions[38] = function () {  // key Up
+_actions[38] = function (e) {  // key Up
   setActive(_active - 1);
+  e.preventDefault();
 };
 
 _elem.search.onkeydown = function (e) {
