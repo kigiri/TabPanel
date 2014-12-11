@@ -75,6 +75,10 @@
       padding: 5px;
       width: 595px;
     }
+    input.invalid {
+      background-color: rgb(244, 244, 244);
+      outline-offset: 0px;
+    }
     #list {
       border: 1px solid #DFDFDF;
       height: 520px;
@@ -130,7 +134,7 @@
     </style>
   </head>
   <body>
-    <input type="text" id="search">
+    <input type="text" id="search" spellcheck="false">
     <div id="list"></div>
   </body>
   <script src="popup.js"></script>

@@ -7,6 +7,7 @@ var _prevTabId = -1;
 var _actions = [];
 var _prevInputValue = '';
 var _isSelecting = false;
+var _input = _elem.search;
 var _normalizeMap = {
   'Á': 'A', 'Ă': 'A', 'Ắ': 'A', 'Ặ': 'A', 'Ằ': 'A', 'Ẳ': 'A', 'Ẵ': 'A',
   'Ǎ': 'A', 'Â': 'A', 'Ấ': 'A', 'Ậ': 'A', 'Ầ': 'A', 'Ẩ': 'A', 'Ẫ': 'A',
@@ -215,6 +216,12 @@ function initialTabsSort(a, b) {
 }
 
 function scoreTabsSort(a, b) {
+  if (b.partial && !a.partial) {
+    return -1;
+  }
+  if (a.partial && !b.partial) {
+    return 1;
+  }
   if (b.score !== a.score) {
     return b.score - a.score;
   }
@@ -328,7 +335,7 @@ function init() {
   chrome.runtime.sendMessage({}, setPrevious);
 
   // Start the update
-  setInterval(update, 100);
+  setInterval(update, 35);
 }
 
 // Fuzzy Search
@@ -369,7 +376,7 @@ function fuzzyMatch(str, pattern, s, p, score, bonus, matched, deepness) {
 
   // End of the string, failed to match all the pattern, apply penalty to score
   if (s >= str.length) {
-    return makeObject(~~(score / 3), matched, true);
+    return makeObject(score, matched, true);
   }
 
   var c = str[s];
@@ -433,26 +440,39 @@ function fuzzyMatchString(tab, key, pattern) {
   var bestMatch = fuzzyMatch(str, pattern, 0, 0, 0, 8, [], 6);
   tab.score += bestMatch.score;
   tab[key + 'HTML'] = applyArrayToHTML(bestMatch.matched, tab[key]);
-  return bestMatch.partial ? 1 : 0;
+  return bestMatch.partial ? 0 : 1;
+}
 }
 
-function refreshInputMatching(pattern) {
-  if (typeof pattern !== 'string' || !pattern.length) {
+function refreshInputMatching() {
+  if (typeof _prevInputValue !== 'string' || !_prevInputValue.length) {
+    _input.className = '';
     return showTabs(initialTabsSort);
   }
-  pattern = normalize(pattern.toLowerCase()).replace(/-/g, '');
-  var ret = 0;
+  var pattern = normalize(_prevInputValue.toLowerCase()).replace(/-/g, '');
+  var noMatch = true;
   for (var i = _tabs.length - 1; i >= 0; i--) {
     var tab = _tabs[i];
+    var ret = 0;
     tab.score = 0;
     ret += fuzzyMatchString(tab, 'hostname', pattern);
     tab.score *= 2; // match in host should bd worth more
     ret += fuzzyMatchString(tab, 'title', pattern);
     ret += fuzzyMatchString(tab, 'pathname', pattern);
+    if (ret) {
+      noMatch = false;
+      tab.partial = false;
+    } else {
+      tab.partial = true;
+    }
     tab.titleHTML = tab.titleHTML;
   }
-  if (ret) {
+  if (noMatch) {
+    // set class no match on input
+    _input.className = 'invalid';
+  } else {
     showTabs(scoreTabsSort);
+    _input.className = '';
   }
 }
 
@@ -511,7 +531,7 @@ function closeSelectedTabs() {
 
   closeTabs(selectedTabs, function () {
     _tabs = _tabs.filter(filterAndDestroySelected);
-    refreshInputMatching(_prevInputValue);
+    refreshInputMatching();
   });
 }
 
@@ -544,9 +564,8 @@ function toggleSelectActiveTab() {
 
 // Update routine
 function update() {
-  var input = _elem.search;
-  if (_prevInputValue !== input.value) {
-    _prevInputValue = input.value;
+  if (_prevInputValue !== _input.value) {
+    _prevInputValue = _input.value;
     refreshInputMatching(_prevInputValue);
   }
 }
