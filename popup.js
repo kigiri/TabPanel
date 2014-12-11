@@ -471,7 +471,7 @@ function setMatchCss(button, type) {
 
 function refreshInputMatching() {
   if (typeof _prevInputValue !== 'string' || !_prevInputValue.length) {
-    _input.className = '';
+    delClass(_input, 'invalid');
     return showTabs(initialTabsSort);
   }
   var pattern = normalize(_prevInputValue.toLowerCase()).replace(/-/g, '');
@@ -496,10 +496,10 @@ function refreshInputMatching() {
   }
   if (noMatch) {
     // set class no match on input
-    _input.className = 'invalid';
+    addClass(_input, 'invalid');
   } else {
     showTabs(scoreTabsSort);
-    _input.className = '';
+    delClass(_input, 'invalid');
   }
 }
 
@@ -568,11 +568,24 @@ function moveSelectedTabs() {
 
 function unselectTab(tab) {
   tab.isUserSelected = false;
+  delClass(tab.buttonHTML, 'selected');
+}
+
+function setSelectingState(state) {
+  if (state !== _isSelecting) {
+    // New state, apply change
+    if (state) {
+      addClass(_input, 'disabled');
+    } else {
+      delClass(_input, 'disabled');
+    }
+  }
+  _isSelecting = state;
 }
 
 function unselectAllTabs() {
   _tabs.forEach(unselectTab);
-  _isSelecting = false;
+  setSelectingState(false);
 }
 
 function toggleSelectActiveTab() {
@@ -586,7 +599,7 @@ function toggleSelectActiveTab() {
     activeTab.isUserSelected = true;
     addClass(btn, 'selected');
   }
-  _isSelecting = !!(getAllSelectedTabs().length);
+  setSelectingState(!!(getAllSelectedTabs().length));
 }
 
 // Update routine
@@ -627,8 +640,12 @@ _actions[38] = function (e) {  // key Up
 
 _elem.search.onkeydown = function (e) {
   var fn = _actions[e.keyCode];
-  if (typeof fn !== 'function') { return; }
-  fn(e);
+  if (typeof fn === 'function') {
+    fn(e);
+  }
+  if (_isSelecting) {
+    e.preventDefault();
+  }
 }
 
 document.body.onclick = function (e) {
