@@ -245,6 +245,9 @@ function setDomAttrs(button, idx, title, url, tab) {
   button.id = 'tab-' + idx;
   button.dataset.index = idx;
   delClass(button, 'active');
+  if (!_prevInputValue.length) {
+    setMatchCss(button, 'full');
+  }
   title.innerHTML = isMatched() ? tab.titleHTML : tab.title;
   url.innerHTML = makeUrl(tab);
 }
@@ -456,6 +459,14 @@ function addClass(elem, cssClass) {
 function delClass(elem, cssClass) {
   elem.className = elem.className.replace(new RegExp(cssClass, 'ig'), '');
 }
+
+function setMatchCss(button, type) {
+  var newclass = button.className.replace(/match-([^\s-]+)/, 'match-' + type);
+  if (!/match-/.test(newclass)) {
+    button.className += ' match-' + type;
+  } else {
+    button.className = newclass;
+  }
 }
 
 function refreshInputMatching() {
@@ -475,9 +486,11 @@ function refreshInputMatching() {
     ret += fuzzyMatchString(tab, 'pathname', pattern);
     if (ret) {
       noMatch = false;
+      setMatchCss(tab.buttonHTML, 'full');
       tab.partial = false;
     } else {
       tab.partial = true;
+      setMatchCss(tab.buttonHTML, 'partial');
     }
     tab.titleHTML = tab.titleHTML;
   }
