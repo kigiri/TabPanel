@@ -4,7 +4,7 @@
   "name": "Tab Panel",
   "short_name": "TabPanel",
   "description": "This extension allow you to switch tab easly.",
-  "version": "0.1.3",
+  "version": "0.2.0",
 
   "permissions": [
     "tabs"
