@@ -244,7 +244,7 @@ function makeUrl(tab) {
 function setDomAttrs(button, idx, title, url, tab) {
   button.id = 'tab-' + idx;
   button.dataset.index = idx;
-  button.className = '';
+  delClass(button, 'active');
   title.innerHTML = isMatched() ? tab.titleHTML : tab.title;
   url.innerHTML = makeUrl(tab);
 }
@@ -266,10 +266,12 @@ function createButtonHTML(tab, idx) {
 }
 
 function generateFavicon(tab) {
+  if (tab.favicon) { return; }
+  tab.favicon = true;
   var favIcon = document.createElement('div');
   favIcon.className = 'fav-icon';
   if (tab.windowId === _currentTab.windowId) {
-    favIcon.className += ' current';
+    addClass(tab.buttonHTML, 'current');
   }
   if (tab.favIconUrl) {
     var img = document.createElement('img');
@@ -311,7 +313,9 @@ function appendAllTabs() {
     var c = button.children;
     setDomAttrs(button, i, c[0], c[1], tab);
     l.appendChild(button);
-    setTimeout(generateFavicon, 20 * i, tab);
+    if (!tab.favicon) {
+      setTimeout(generateFavicon, 20 * i, tab);
+    }
   }
   setActive(0);
 }
@@ -442,6 +446,16 @@ function fuzzyMatchString(tab, key, pattern) {
   tab[key + 'HTML'] = applyArrayToHTML(bestMatch.matched, tab[key]);
   return bestMatch.partial ? 0 : 1;
 }
+
+function addClass(elem, cssClass) {
+  if (elem.className.indexOf(cssClass) === -1) {
+    elem.className = elem.className.replace(/\s*$/, ' ' + cssClass);
+  }
+}
+
+function delClass(elem, cssClass) {
+  elem.className = elem.className.replace(new RegExp(cssClass, 'ig'), '');
+}
 }
 
 function refreshInputMatching() {
@@ -497,11 +511,11 @@ function setActive(idx) {
 
   var lastTab = _tabs[_active];
   if (lastTab !== undefined) {
-    lastTab.buttonHTML.className = '';
+    delClass(lastTab.buttonHTML, 'active');
   }
 
   var btn = _tabs[idx].buttonHTML;
-  btn.className = 'active';
+  addClass(btn, 'active');
   _active = idx;
 
   scrollTo(btn);
@@ -551,13 +565,13 @@ function unselectAllTabs() {
 function toggleSelectActiveTab() {
   var activeTab = _tabs[_active];
   if (!activeTab) { return; }
-  var favIcon = activeTab.buttonHTML.firstChild;
+  var btn = activeTab.buttonHTML;
   if (activeTab.isUserSelected) {
     activeTab.isUserSelected = false;
-    favIcon.className = favIcon.className.replace(/( |)selected/, '');
+    delClass(btn, 'selected');
   } else {
     activeTab.isUserSelected = true;
-    favIcon.className += ' selected';
+    addClass(btn, 'selected');
   }
   _isSelecting = !!(getAllSelectedTabs().length);
 }
