@@ -15,7 +15,12 @@
       "background.js"
     ]
   },
-
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["injected.js"]
+    }
+  ],
   "commands": {
     "_execute_browser_action": {
       "suggested_key": {
@@ -24,6 +29,16 @@
         "chromeos": "Alt+P",
         "linux": "Alt+P",
         "mac": "Alt+P"
+      }
+    },
+    "switch_between_tabs": {
+      "description": "Switch between tabs like Alt+Tab switch between windows.",
+      "suggested_key": {
+        "default": "Alt+T",
+        "windows": "Alt+T",
+        "chromeos": "Alt+T",
+        "linux": "Alt+T",
+        "mac": "Alt+T"
       }
     }
   },
