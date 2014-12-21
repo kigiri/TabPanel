@@ -77,16 +77,10 @@
   }
 
   function generatePanel() {
-    var bg = document.createElement('div');
-    bg.id = 'tab-panel__bg';
     var div = document.createElement('div');
     div.id = 'tab-panel__panel';
     div.appendChild(document.createElement('h3'));
-    // document.body.style.webkitFilter = "blur(5px) grayscale(0.4) opacity(0.7)";
-    // document.body.appendChild(bg);
     document.body.appendChild(div);
-    div.addEventListener('keyup', detectModRelease);
-    div.addEventListener('keydown', handleKeys);
     return div;
   }
 
