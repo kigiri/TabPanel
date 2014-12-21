@@ -4,10 +4,11 @@
   "name": "Tab Panel",
   "short_name": "TabPanel",
   "description": "This extension allow you to switch tab easly.",
-  "version": "0.2.0",
+  "version": "0.4.0",
 
   "permissions": [
-    "tabs"
+    "tabs",
+    "chrome://favicon/"
   ],
 
   "background": {
@@ -18,7 +19,8 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["injected.js"]
+      "js": ["injected.js"],
+      "css": ["style.css"]
     }
   ],
   "commands": {
@@ -46,5 +48,8 @@
   "browser_action": {
     "default_icon": "icon.png",
     "default_popup": "popup.html"
-  }
+  },
+  "web_accessible_resources": [
+    "favicons/*.png"
+  ]
 }

@@ -1,12 +1,16 @@
-var _tabs = [];
-var _usedSwitchMod = 'AltKey';
-var _switchingCount = false;
-var _lastTabSwitched = null;
+// "use strict";
+
+/*******************************************************************************
+ * Globals
+ ******************************************************************************/
+
+var _currentTab = {};
 var _opts = {
-  // this option allow previous tab to be from any window
-  'allWindows': true,
-};
-var _currentTab = null;
+  mod: 'AltKey',
+  disableBackward: false,
+  allWindows: true,
+  hideIncognito: true,
+}
 var _normalizeMap = {
   'á': 'a', 'ă': 'a', 'ắ': 'a', 'ặ': 'a', 'ằ': 'a', 'ẳ': 'a', 'ẵ': 'a',
   'ǎ': 'a', 'â': 'a', 'ấ': 'a', 'ậ': 'a', 'ầ': 'a', 'ẩ': 'a', 'ẫ': 'a',
@@ -73,7 +77,49 @@ var _normalizeMap = {
   '\\': '-', '/': '-', '<': '-', '>': '-'
 };
 
+
+/*******************************************************************************
+ * Collection of usefull functions
+ ******************************************************************************/
+
+function customError(name, message) {
+  this.name = (name || 'GENERIC_ERROR');
+  this.message = (message || 'Unkown message');
+}
+
+// Default Javascript conversion to base64 fail on unicode text
+function toBase64(str) {
+  var C = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  var out = "", i = 0, len = str.length, c1, c2, c3;
+  while (i < len) {
+    c1 = str.charCodeAt(i++) & 0xff;
+    if (i == len) {
+      out += C.charAt(c1 >> 2);
+      out += C.charAt((c1 & 0x3) << 4);
+      out += "==";
+      break;
+    }
+    c2 = str.charCodeAt(i++);
+    if (i == len) {
+      out += C.charAt(c1 >> 2);
+      out += C.charAt(((c1 & 0x3)<< 4) | ((c2 & 0xF0) >> 4));
+      out += C.charAt((c2 & 0xF) << 2);
+      out += "=";
+      break;
+    }
+    c3 = str.charCodeAt(i++);
+    out += C.charAt(c1 >> 2);
+    out += C.charAt(((c1 & 0x3) << 4) | ((c2 & 0xF0) >> 4));
+    out += C.charAt(((c2 & 0xF) << 2) | ((c3 & 0xC0) >> 6));
+    out += C.charAt(c3 & 0x3F);
+  }
+  return out;
+}
+
+// Allow to remove specials characters and normalize accent
+// for a more tolerant search
 function normalize(str) {
+  if (!str) { return str; }
   var normalized_str = '';
   var c;
 
@@ -88,227 +134,352 @@ function normalize(str) {
   return (normalized_str);
 }
 
-// filters
-function defaultTabSort(a, b) {
-  if (a.lastActivityTime !== b.lastActivityTime) {
-    if (a.lastActivityTime > b.lastActivityTime) { return -1; }
-    return 1;
-  }
-  if (a.windowId !== b.windowId) {
-    if (a.windowId === _currentTab.windowId) {
-      return -1;
-    }
-    if (b.windowId === _currentTab.windowId) {
-      return 1;
-    }
-    return b.windowId - a.windowId;
-  }
-  return a.index - b.index;
+function invalidHttpUrl(url) {
+  return (notInRange(url.length, 16, 150) || !/^http/.test(url));
 }
 
-function updateLastActivity(info) {
-  var id = (typeof info === 'object') ? info.tabId : info;
-  if (!id) { return; }
-  // If we are switching tab we wait for the end of the selection to save
-  if (_switchingCount !== false) {
-    _lastTabSwitched = id;
-    return;
-  }
+/*******************************************************************************
+ * Error handlers
+ ******************************************************************************/
 
-  var tab = getTab(id);
-  if (tab) {
-    tab.lastActivityTime = Date.now();
-    _currentTab = tab;
-    _tabs.sort(defaultTabSort);
-  } else {
-    chrome.tabs.get(id, function (newTab) {
-      if (chrome.runtime.lastError) {
-        // tab not found ?
-        return console.log(chrome.runtime.lastError);
+function wrongType(arg, type) {
+  if (type instanceof Array) {
+    for (var i = 0; i < type.length; i++) {
+      if (typeof arg === type[i]) { return false; }
+    }
+  } else if (typeof arg === type) { return false; }
+  console.warn(new Error('Wrong arguments types'));
+  return true;
+}
+
+function notInRange(arg, min, max) {
+  return ((arg < min) || (arg > max));
+}
+
+
+/*******************************************************************************
+ * Tab Object and Methods declarations
+ ******************************************************************************/
+
+var Tab = function (tabObject) {
+  this.update(tabObject);
+}
+
+Tab.prototype = {
+  open: function() {
+    if (this.windowId !== _currentTab.windowId) {
+      chrome.windows.update(this.windowId, { 'focused': true });
+    }
+    chrome.tabs.update(this.id, { 'active': true });
+  },
+
+  close: function() {
+    chrome.tabs.remove(this.id);
+  },
+
+  watch: function() {
+    this.lastSeen = Date.now();
+    _currentTab = this;
+  },
+
+  flagForUpdate: function() {
+    this.lastUpdate = Date.now();
+  },
+
+  update: function(newValue) {
+    if (wrongType(newValue, 'object')) { return; }
+    for (var key in newValue) {
+      this[key] = newValue[key];
+    }
+    this.lastUpdate = Date.now();
+    this.lastSeen = (this.lastSeen || 0);
+    this.format();
+  },
+
+  format: function() {
+    var url = (this.url.match(/(^\S+\/\/)([^\/]+)(.+)/)
+      || ['', '', this.url, '/']);
+    this.hostname = url[2];
+    this.pathname = url[3];
+    if (/^data:/.test(this.favIconUrl)) {
+      FavIcons.add(this.hostname, this.favIconUrl);
+      this.favIconUrl = this.hostname;
+    } else if (/^chrome:/.test(this.url)) {
+      var localUrl = FavIcons.localUrl(this.url);
+      if (localUrl) {
+        FavIcons.add(this.url, localUrl, 'chrome');
+      } else {
+        FavIcons.gen(this.url);
       }
-      generateTab(newTab);
-      newTab.lastActivityTime = Date.now();
-      _currentTab = newTab;
-      _tabs.sort(defaultTabSort);
-    });
-  }
-}
-
-function formatTab(tab) {
-  var url = new URL(tab.url);
-  if (!/^http/.test(url.protocol)) {
-    tab.hostname = (url.protocol === 'chrome:')
-                  ? url.origin
-                  : url.href.substring(0, 75);
-    tab.suffix = '';
-    tab.pathname = '';
-  } else {
-    tab.hostname = url.hostname.replace(/(^www\.|\..[^\.]+$)/g, '');
-    tab.suffix = url.hostname.match(/\..[^\.]+$/);
-    tab.pathname = (url.pathname + url.hash).replace(/\/$/, '');
-    tab.pathname = tab.pathname.substring(0, 75 - tab.hostname.length);
-  }
-  tab.hostnameNormalized = normalize(tab.hostname);
-  tab.titleNormalized = normalize(tab.title);
-  tab.pathnameNormalized = normalize(tab.pathname);
-  tab.lastActivityTime = 0;
-  if (tab.selected && tab.active) {
-    _currentTab = tab;
-  }
-}
-
-function loadTabs(tabs) {
-  _tabs = tabs;
-  _tabs.forEach(formatTab);
-}
-
-
-function init() {
-  // Load All tabs
-  chrome.tabs.query({}, loadTabs);
-}
-
-function generateTab(tab) {
-  formatTab(tab);
-  _tabs.unshift(tab);
-}
-
-function getTab(id) {
-  for (var i = 0; i < _tabs.length; i++) {
-    if (_tabs[i].id === id) {
-      return _tabs[i];
+      // Some tabs don't have the favIcon link
+      // it's like favIcon appears out of thin air, it's magic !
+      // So i'm overriding the url.
+      this.favIconUrl = this.url;
+    } else if (FavIcons.get(this.favIconUrl) !== 'success') {
+      FavIcons.gen(this.hostname);
+      this.favIconUrl = this.hostname;
     }
+    this.hostnameNormalized = normalize(this.hostname);
+    this.titleNormalized = normalize(this.title);
+    this.pathnameNormalized = normalize(this.pathname);
   }
-  return null;
-}
+};
 
-function getTabIdx(id) {
-  for (var i = 0; i < _tabs.length; i++) {
-    if (_tabs[i].id === id) {
-      return i;
+
+/*******************************************************************************
+ * Tab list declaration
+ ******************************************************************************/
+
+var TabList = (function () {
+  var TabList = {},
+    prevArray = [],
+    lastUpdate = Date.now(),
+    pendingCallbacks = 0;
+
+  // Filter
+  function currentAndOpts(tab) {
+    if (wrongType(tab, 'object')) { return; }
+    if ((tab.id === _currentTab.id) || (tab.id === undefined)) {
+      return false;
     }
+    return !(_opts.hideIncognito && tab.incognito);
   }
-  return -1;
-}
 
-function removeFromList(tabId, removeInfo) {
-  _tabs = _tabs.splice(getTabIdx(tabId), 1);
-}
+  function tryCallback(callback) {
+    if (pendingCallbacks > 0) { return; }
+    callback(prevArray.filter(currentAndOpts));
+  }
 
-// Listen to tab changes to save previous tab
-chrome.tabs.onActivated.addListener(updateLastActivity);
-
-// Clean history of removed tabs
-chrome.tabs.onRemoved.addListener(removeFromList);
-
-// Listen to window changes to do the same
-if (_opts.allWindows) {
-  chrome.windows.onFocusChanged.addListener(function (windowId) {
-    // get active tab
-    var queryInfo = {
-      'windowId': windowId,
-      'active': true
-    };
-    chrome.tabs.query(queryInfo, function (tabs) {
-      var tab = tabs[0];
-      if (!(/^chrome\-devtools\:/.test(tab.url) || tab.incognito)) {
-        // updateLastActivity(tab.id);
+  // Export (refetch if need to update, sort and convert to arry of TabList)
+  TabList.export = function (callback) {
+    if (wrongType(callback, 'function')) { return; }
+    if (pendingCallbacks > 0) { return callback(prevArray); }
+    var generatedArray = [], tab;
+    for (var id in TabList) {
+      tab = TabList[id];
+      if (!(tab instanceof Tab)) { continue; }
+      if (tab.lastUpdate > TabList.lastUpdate) {
+        pendingCallbacks++;
+        chrome.tabs.get(tab.id, function (tabObject) {
+          if (typeof tabObject !== "object") {
+            TabList.remove(tab.id);
+          } else {
+            TabList[tabObject.id].update(tabObject);
+          }
+          pendingCallbacks--;
+          tryCallback(callback);
+        });
       }
-    });
-  });
-}
-
-// Messages Handlers
-var _messagesHandlers = {
-  'getInfo': function () {
-    return {
-      'tabs': _tabs,
-      'map': _normalizeMap,
-      'currentTab': _currentTab
-    };
-  },
-  'hookWindow': function () {
-    return _usedSwitchMod;
-  },
-  'modkeyUp': function (req) {
-    if (_switchingCount !== false) {
-      console.log('reset');
-      _switchingCount = false;
-      updateLastActivity(_lastTabSwitched);
-      _lastTabSwitched = null;
+      generatedArray.push(tab);
     }
-  },
-  'default': function (arg) { return arg}
+    prevArray = generatedArray;
+    tryCallback(callback);
+    lastUpdate = Date.now();
+  };
+
+  // New tab
+  TabList.add = function (tabInfo) {
+    if (wrongType(tabInfo, 'object')) { return; }
+    if (tabInfo instanceof Array) {
+      tabInfo.forEach(TabList.add);
+    } else {
+      TabList[tabInfo.id] = new Tab(tabInfo);
+      return TabList[tabInfo.id];
+    }
+  };
+
+  // Del tab
+  TabList.del = function (tabId) {
+    if (wrongType(tabId, ['number', 'string'])) { return; }
+    delete TabList[tabId];
+  };
+  return TabList;
+})();
+
+
+/*******************************************************************************
+ * FavIcons
+ ******************************************************************************/
+
+var FavIcons = (function() {
+  var base = chrome.extension.getURL('favIcons/');
+  var localFavIcons = {
+    bookmarks: base + 'IDR_BOOKMARKS_FAVICON.png',
+    conflicts: base + 'IDR_CONFLICT_FAVICON.png',
+    downloads: base + 'IDR_DOWNLOADS_FAVICON.png',
+    chrome: base + 'IDR_PRODUCT_LOGO.png',
+    help: base + 'IDR_PRODUCT_LOGO.png',
+    plugins: base + 'IDR_EXTENSIONS_FAVICON.png',
+    extensions: base + 'IDR_EXTENSIONS_FAVICON.png',
+    components: base + 'IDR_EXTENSIONS_FAVICON.png',
+    flags: base + 'IDR_FLAGS_FAVICON.png',
+    history: base + 'IDR_HISTORY_FAVICON.png',
+    crashes: base + 'IDR_SAD_FAVICON.png',
+    settings: base + 'IDR_SETTINGS_FAVICON.png',
+    apps: base + 'IDR_APP_LIST.png',
+  };
+  var storedBase64Icons = {};
+  function addFavIcon(key, base64url, type) {
+    storedBase64Icons[key] = {
+      'data': base64url,
+      'type': (type || 'default')
+    };
+  }
+
+  function generateFavIcon(key) {
+      if (wrongType(key, 'string')) {
+        key = 'default';
+      }
+      if (storedBase64Icons[key]) { return; }
+      var url = 'data:image/png;base64,' + new Identicon(key, 16).toString();
+      addFavIcon(key, url, 'generated');
+    }
+
+  return {
+    all: storedBase64Icons,
+    add: addFavIcon,
+    gen: generateFavIcon,
+
+    get: function (url) {
+      if (wrongType(url, 'string')) { return; }
+      if (typeof storedBase64Icons[url] === "object") { return 'success'; }
+      if (invalidHttpUrl(url)) { return; }
+      var type = (url.match(/[^\.]+$/) || [])[0]; // Extract extension
+      if (!type) { return; }
+      type = (type.match(/^[^\?]+/) || [])[0]; // Remove additional URL junk
+
+      switch (type) {
+        case 'jpg': type = 'image/jpeg'; break;
+        case 'ico': type = 'image/vnd.microsoft.icon'; break;
+        case 'png':
+        case 'tiff':
+        case 'jpeg': type = 'image/' + type; break;
+        default: return;
+      }
+
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', url);
+      xhr.responseType = 'arrayBuffer';
+      xhr.overrideMimeType("text/plain; charset=x-user-defined");
+      addFavIcon(url, "#", "loading");
+      xhr.addEventListener('load', function () {
+        if (xhr.status === 200) {
+          var data = 'data:' + type + ';base64,' + toBase64(xhr.responseText);
+          addFavIcon(url, data);
+        }
+      }, false);
+      xhr.send();
+      return 'success';
+    },
+
+    localUrl: function (url) {
+      var type = url.match(/^chrome:\/\/([^\/]+)/);
+      if (!type) { return; }
+      return localFavIcons[type[1]];
+    }
+  };
+})();
+
+
+/*******************************************************************************
+ * Track watched tabs
+ ******************************************************************************/
+
+function setWatchTab(tab) {
+  if (wrongType(tab, 'object')) { return; }
+  var foundTab = (TabList[(tab.tabId || tab[0].id)] || TabList.add(tab));
+  if (!foundTab) {
+    return console.error(new Error('Tab not generated wut wut ??'), tab);
+  }
+  foundTab.watch();
 }
 
-chrome.runtime.onMessage.addListener(function (req, sender, resCb) {
-  if (!req) { return; }
-  var res = (_messagesHandlers[req.type] || _messagesHandlers.default)(req);
-  if (typeof resCb === 'function') {
-    resCb(res);
+chrome.tabs.onActivated.addListener(setWatchTab);
+
+// On window focus change
+chrome.windows.onFocusChanged.addListener(function (windowId) {
+  // get active tab
+  var queryInfo = {
+    'windowId': windowId,
+    'active': true
+  };
+  chrome.tabs.query(queryInfo, setWatchTab);
+});
+
+
+/*******************************************************************************
+ * Keep TabList updated
+ ******************************************************************************/
+
+chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabObject) {
+  var tab = TabList[tabId];
+  if ((tab instanceof Tab)) {
+    tab.update(tabObject);
+  } else {
+    TabList.add(tabObject);
   }
 });
 
-function openTab(tab, sign, nextTry) {
-  chrome.tabs.update(tab.id, { 'active': true }, function () {
-    if (chrome.runtime.lastError) {
-      nextTry();
-    } else {
-      _switchingCount += sign;
-      if (tab.windowId !== _currentTab.windowId) {
-        chrome.windows.update(tab.windowId, { 'focused': true }, function () {
-          if (chrome.runtime.lastError) {
-            nextTry();
-          }
+
+/*******************************************************************************
+ * Process new tabs
+ ******************************************************************************/
+
+chrome.tabs.onCreated.addListener(TabList.add);
+
+
+/*******************************************************************************
+ * Remove tabs
+ ******************************************************************************/
+
+chrome.tabs.onRemoved.addListener(TabList.del);
+
+
+/*******************************************************************************
+ * Communication with other tabs and scripts
+ ******************************************************************************/
+
+(function () {
+  var handlers = {
+    'loadPopup': function (req, callback) {
+      TabList.export(function (tabs) {
+        callback({
+          'tabs': tabs,
+          'map': _normalizeMap,
+          'currentTab': _currentTab
         });
-      }
-    }
+      });
+    },
+    'loadOpts':     function (req, callback) { callback(_opts); },
+    'loadFavIcons': function (req, callback) { callback(FavIcons.all); },
+    'loadTabs':     function (req, callback) { TabList.export(callback); },
+    'default':      function (req, callback) { return req; }
+  };
+
+  chrome.runtime.onMessage.addListener(function (req, sender, callback) {
+    (handlers[(req.type || req)] || handlers.default)(req, callback);
   });
-}
+})();
 
-function activeTab(idx, sign) {
-  console.log(idx, _switchingCount);
-  var max = _tabs.length - 1;
-  if (idx > max) {
-    idx = 0;
-  } else if (idx < 1) {
-    idx = max;
-  }
-  var tab = _tabs[idx];
-  if (!tab) { return; }
-  openTab(tab, sign, function () {
-    activeTab(idx + sign);
+
+/*******************************************************************************
+ * Commands and Shortcuts
+ ******************************************************************************/
+
+(function () {
+  var handler = {
+    "switch_between_tabs": function () {
+      chrome.tabs.sendMessage(_currentTab.id, 'switch_between_tabs');
+    },
+    "default": function (command) {
+      console.warn('Unhandled command: ' + command);
+    }
+  };
+
+  chrome.commands.onCommand.addListener(function (command) {
+    (handler[command] || handler.default)(command);
   });
-}
-
-// Commands handlers
-var _commandsHandlers = {
-  "switch_between_tabs": function () {
-    var max = _tabs.length;
-    if (_switchingCount === false) {
-      _switchingCount = 1;
-    }
-    activeTab(~~((_switchingCount + 1) % max), 1);
-  },
-  "switch_back_between_tabs": function () {
-    var max = _tabs.length - 1;
-    if (_switchingCount === false) {
-      _switchingCount = max;
-    } else {
-      _switchingCount--;
-    }
-    activeTab(max - _switchingCount, -1);
-  },
-  "default": function (command) {
-    console.warn('Unhandled command: ' + command);
-  }
-}
-
-
-// Commands binding
-chrome.commands.onCommand.addListener(function (command) {
-  (_commandsHandlers[command] || _commandsHandlers.default)(command);
-})
+})();
 
 chrome.commands.getAll(function (commands) {
   var switchShortcut = [];
@@ -322,11 +493,331 @@ chrome.commands.getAll(function (commands) {
   // Set used the modifiers
   for (var i = 0; i < switchShortcut.length; i++) {
     switch (switchShortcut[i]) {
-      case 'Alt'  : _usedSwitchMod = 'AltKey'; return;
-      case 'Ctrl' : _usedSwitchMod = 'ControlKey'; return;
-      case 'Shift': _usedSwitchMod = 'ShiftKey'; return;
+      case 'Ctrl' : _opts.mod = 'ControlKey'; break;
+      case 'Shift': _opts.disableBackward = true;
+        // I should alert the user that shift is used to go backward in the
+        // tab cycle, and so using it will disable this functionality.
+        break;
+      default: break;
     }
   }
+});
+
+
+/*******************************************************************************
+ * Populate tab list
+ ******************************************************************************/
+
+chrome.tabs.query({}, TabList.add);
+
+/*******************************************************************************
+ * Set current tab
+ ******************************************************************************/
+
+chrome.tabs.query({ 'currentWindow': true, 'active': true }, function (tabs) {
+  _currentTab = tabs[0];
 })
 
-init();
+
+/*******************************************************************************
+ * Identicon.js v1.0
+ * http://github.com/stewartlord/identicon.js
+ *
+ * Requires PNGLib
+ * http://www.xarg.org/download/pnglib.js
+ *
+ * Copyright 2013, Stewart Lord
+ * Released under the BSD license
+ * http://www.opensource.org/licenses/bsd-license.php
+ *
+ * Modified by cdenis for favicons, copyright I don't give a fuck.
+ ******************************************************************************/
+
+var Identicon = (function() {
+  Identicon = function(url, size, margin){
+    this.url = url;
+    this.size = (size || 64);
+  }
+
+  Identicon.prototype = {
+    url: null,
+    margin: null,
+
+    render: function () {
+      var hash = this.hash(this.url);
+      // console.log(this.url, hash);
+      var image = new PNGlib(16, 16, 256);
+
+      // light-grey background
+      var bg = image.color(0, 0, 0, 0);
+
+      // foreground is last 7 chars as hue at 50% saturation, 70% brightness
+      var rgb = this.hsl2rgb(~~(hash % 360) / 360, 0.5, 0.7);
+      var fg = image.color(rgb[0], rgb[1], rgb[2]);
+
+      // the first 15 characters of the url control the pixels (even/odd)
+      // they are drawn down the middle first, then mirrored outwards
+      var x, y, color, i = 1;
+      for (y = 0; y < 16; y += 2) {
+        for (x = 0; x < 8; x += 2) {
+          i++;
+          color = ((hash % i) / i > 0.5) ? bg : fg;
+          this.drawPixel(image, 14 - x, y, color);
+          this.drawPixel(image, x, y, color);
+        }
+      }
+      return image;
+    },
+
+    drawPixel: function (image, x, y, color) {
+      image.buffer[image.index(x, y)] = color;
+      image.buffer[image.index(x + 1, y)] = color;
+      image.buffer[image.index(x, y + 1)] = color;
+      image.buffer[image.index(x + 1, y + 1)] = color;
+    },
+
+    hash: function (str) {
+      if (wrongType(str, 'string')) { return; }
+      var prev = 5381;
+      var total = 0;
+      for (var i = 0; i < str.length; i++) {
+        var c = str[i].charCodeAt();
+        total = ((prev << 5) + prev) + c;
+        prev = c;
+      }
+      return total;
+    },
+
+    // adapted from: https://gist.github.com/aemkei/1325937
+    hsl2rgb: function(h, s, b) {
+      h *= 6;
+      s = [
+        b += s *= b < 0.5 ? b : 1 - b,
+        b - h % 1 * s * 2,
+        b -= s *= 2,
+        b,
+        b + h % 1 * s,
+        b + s
+      ];
+      return [
+        ~~(s[ (~~h)  % 6 ] * 255),  // red
+        ~~(s[ (h|16) % 6 ] * 255),  // green
+        ~~(s[ (h|8)  % 6 ] * 255)   // blue
+      ];
+    },
+
+    toString: function(){
+      return this.render().getBase64();
+    }
+  }
+
+  return Identicon;
+})();
+
+
+/*******************************************************************************
+ * A handy class to calculate color values.
+ *
+ * @version 1.0
+ * @author Robert Eisele <robert@xarg.org>
+ * @copyright Copyright (c) 2010, Robert Eisele
+ * @link http://www.xarg.org/2010/03/generate-client-side-png-files-using-javascript/
+ * @license http://www.opensource.org/licenses/bsd-license.php BSD License
+ *
+ ******************************************************************************/
+
+(function() {
+
+  // helper functions for that ctx
+  function write(buffer, offs) {
+    for (var i = 2; i < arguments.length; i++) {
+      for (var j = 0; j < arguments[i].length; j++) {
+        buffer[offs++] = arguments[i].charAt(j);
+      }
+    }
+  }
+
+  function byte2(w) {
+    return String.fromCharCode((w >> 8) & 255, w & 255);
+  }
+
+  function byte4(w) {
+    return String.fromCharCode((w >> 24) & 255, (w >> 16) & 255, (w >> 8) & 255, w & 255);
+  }
+
+  function byte2lsb(w) {
+    return String.fromCharCode(w & 255, (w >> 8) & 255);
+  }
+
+  window.PNGlib = function(width,height,depth) {
+
+    this.width   = width;
+    this.height  = height;
+    this.depth   = depth;
+
+    // pixel data and row filter identifier size
+    this.pix_size = height * (width + 1);
+
+    // deflate header, pix_size, block headers, adler32 checksum
+    this.data_size = 2 + this.pix_size + 5 * Math.floor((0xfffe + this.pix_size) / 0xffff) + 4;
+
+    // offsets and sizes of Png chunks
+    this.ihdr_offs = 0;                 // IHDR offset and size
+    this.ihdr_size = 4 + 4 + 13 + 4;
+    this.plte_offs = this.ihdr_offs + this.ihdr_size; // PLTE offset and size
+    this.plte_size = 4 + 4 + 3 * depth + 4;
+    this.trns_offs = this.plte_offs + this.plte_size; // tRNS offset and size
+    this.trns_size = 4 + 4 + depth + 4;
+    this.idat_offs = this.trns_offs + this.trns_size; // IDAT offset and size
+    this.idat_size = 4 + 4 + this.data_size + 4;
+    this.iend_offs = this.idat_offs + this.idat_size; // IEND offset and size
+    this.iend_size = 4 + 4 + 4;
+    this.buffer_size  = this.iend_offs + this.iend_size;  // total PNG size
+
+    this.buffer  = new Array();
+    this.palette = new Object();
+    this.pindex  = 0;
+
+    var _crc32 = new Array();
+
+    // initialize buffer with zero bytes
+    for (var i = 0; i < this.buffer_size; i++) {
+      this.buffer[i] = "\x00";
+    }
+
+    // initialize non-zero elements
+    write(this.buffer, this.ihdr_offs, byte4(this.ihdr_size - 12), 'IHDR', byte4(width), byte4(height), "\x08\x03");
+    write(this.buffer, this.plte_offs, byte4(this.plte_size - 12), 'PLTE');
+    write(this.buffer, this.trns_offs, byte4(this.trns_size - 12), 'tRNS');
+    write(this.buffer, this.idat_offs, byte4(this.idat_size - 12), 'IDAT');
+    write(this.buffer, this.iend_offs, byte4(this.iend_size - 12), 'IEND');
+
+    // initialize deflate header
+    var header = ((8 + (7 << 4)) << 8) | (3 << 6);
+    header+= 31 - (header % 31);
+
+    write(this.buffer, this.idat_offs + 8, byte2(header));
+
+    // initialize deflate block headers
+    for (var i = 0; (i << 16) - 1 < this.pix_size; i++) {
+      var size, bits;
+      if (i + 0xffff < this.pix_size) {
+        size = 0xffff;
+        bits = "\x00";
+      } else {
+        size = this.pix_size - (i << 16) - i;
+        bits = "\x01";
+      }
+      write(this.buffer, this.idat_offs + 8 + 2 + (i << 16) + (i << 2), bits, byte2lsb(size), byte2lsb(~size));
+    }
+
+    /* Create crc32 lookup table */
+    for (var i = 0; i < 256; i++) {
+      var c = i;
+      for (var j = 0; j < 8; j++) {
+        if (c & 1) {
+          c = -306674912 ^ ((c >> 1) & 0x7fffffff);
+        } else {
+          c = (c >> 1) & 0x7fffffff;
+        }
+      }
+      _crc32[i] = c;
+    }
+
+    // compute the index into a png for a given pixel
+    this.index = function(x,y) {
+      var i = y * (this.width + 1) + x + 1;
+      var j = this.idat_offs + 8 + 2 + 5 * Math.floor((i / 0xffff) + 1) + i;
+      return j;
+    }
+
+    // convert a color and build up the palette
+    this.color = function(red, green, blue, alpha) {
+
+      alpha = alpha >= 0 ? alpha : 255;
+      var color = (((((alpha << 8) | red) << 8) | green) << 8) | blue;
+
+      if (typeof this.palette[color] == "undefined") {
+        if (this.pindex == this.depth) return "\x00";
+
+        var ndx = this.plte_offs + 8 + 3 * this.pindex;
+
+        this.buffer[ndx + 0] = String.fromCharCode(red);
+        this.buffer[ndx + 1] = String.fromCharCode(green);
+        this.buffer[ndx + 2] = String.fromCharCode(blue);
+        this.buffer[this.trns_offs+8+this.pindex] = String.fromCharCode(alpha);
+
+        this.palette[color] = String.fromCharCode(this.pindex++);
+      }
+      return this.palette[color];
+    }
+
+    // output a PNG string, Base64 encoded
+    this.getBase64 = function() {
+
+      var s = this.getDump();
+
+      var ch = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+      var c1, c2, c3, e1, e2, e3, e4;
+      var l = s.length;
+      var i = 0;
+      var r = "";
+
+      do {
+        c1 = s.charCodeAt(i);
+        e1 = c1 >> 2;
+        c2 = s.charCodeAt(i+1);
+        e2 = ((c1 & 3) << 4) | (c2 >> 4);
+        c3 = s.charCodeAt(i+2);
+        if (l < i+2) { e3 = 64; } else { e3 = ((c2 & 0xf) << 2) | (c3 >> 6); }
+        if (l < i+3) { e4 = 64; } else { e4 = c3 & 0x3f; }
+        r+= ch.charAt(e1) + ch.charAt(e2) + ch.charAt(e3) + ch.charAt(e4);
+      } while ((i+= 3) < l);
+      return r;
+    }
+
+    // output a PNG string
+    this.getDump = function() {
+
+      // compute adler32 of output pixels + row filter bytes
+      var BASE = 65521; /* largest prime smaller than 65536 */
+      var NMAX = 5552;  /* NMAX is the largest n such that 255n(n+1)/2 + (n+1)(BASE-1) <= 2^32-1 */
+      var s1 = 1;
+      var s2 = 0;
+      var n = NMAX;
+
+      for (var y = 0; y < this.height; y++) {
+        for (var x = -1; x < this.width; x++) {
+          s1+= this.buffer[this.index(x, y)].charCodeAt(0);
+          s2+= s1;
+          if ((n-= 1) == 0) {
+            s1%= BASE;
+            s2%= BASE;
+            n = NMAX;
+          }
+        }
+      }
+      s1%= BASE;
+      s2%= BASE;
+      write(this.buffer, this.idat_offs + this.idat_size - 8, byte4((s2 << 16) | s1));
+
+      // compute crc32 of the PNG chunks
+      function crc32(png, offs, size) {
+        var crc = -1;
+        for (var i = 4; i < size-4; i += 1) {
+          crc = _crc32[(crc ^ png[offs+i].charCodeAt(0)) & 0xff] ^ ((crc >> 8) & 0x00ffffff);
+        }
+        write(png, offs+size-4, byte4(crc ^ -1));
+      }
+
+      crc32(this.buffer, this.ihdr_offs, this.ihdr_size);
+      crc32(this.buffer, this.plte_offs, this.plte_size);
+      crc32(this.buffer, this.trns_offs, this.trns_size);
+      crc32(this.buffer, this.idat_offs, this.idat_size);
+      crc32(this.buffer, this.iend_offs, this.iend_size);
+
+      // convert PNG to string
+      return "\211PNG\r\n\032\n"+this.buffer.join('');
+    }
+  }
+})();

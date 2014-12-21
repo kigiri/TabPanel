@@ -9,6 +9,7 @@ var _prevInputValue = '';
 var _isSelecting = false;
 var _input = _elem.search;
 var _normalizeMap = [];
+var _favIcons;
 
 function normalize(str) {
   var normalized_str = '';
@@ -38,13 +39,9 @@ _elem.search.focus();
 function setInfo(bgInfo) {
   _normalizeMap = bgInfo.map;
   _currentTab = bgInfo.currentTab;
-  console.log('1 - recived:', bgInfo.tabs.length);
-  _tabs = bgInfo.tabs.filter(initialTabsFilter);
-  console.log('2 - filtered:', _tabs.length);
+  _tabs = bgInfo.tabs;
   _tabs.forEach(createButtonHTML);
-  console.log('3 - generateHTML:', _tabs.length);
   showTabs(initialTabsSort);
-  console.log('4 - sort:', _tabs.length);
 }
 
 // Generate tabs
@@ -55,13 +52,6 @@ function showTabs(sortCallback) {
 }
 
 // filters, sort and map callbacks
-function initialTabsFilter(tab) {
-  if ((tab.id === _currentTab.id) || (typeof tab.id === 'undefined')) {
-    return false;
-  }
-  return !(_opts.hideIncognito && tab.incognito);
-}
-
 function onlySelectedTabsFilter(tab) {
   return tab.isUserSelected;
 }
@@ -79,9 +69,8 @@ function filterAndDestroySelected(tab) {
 }
 
 function initialTabsSort(a, b) {
-  if (a.lastActivityTime !== b.lastActivityTime) {
-    if (a.lastActivityTime > b.lastActivityTime) { return -1; }
-    return 1;
+  if (a.lastSeen || b.lastSeen) {
+    return b.lastSeen - a.lastSeen;
   }
   if (a.windowId !== b.windowId) {
     if (a.windowId === _currentTab.windowId) {
@@ -115,9 +104,9 @@ function isMatched() {
 
 function makeUrl(tab) {
   if (isMatched()) {
-    return '<i>' + tab.hostnameHTML + tab.suffix + '</i>' + tab.pathnameHTML;
+    return '<i>' + tab.hostnameHTML + '</i>' + tab.pathnameHTML;
   } else {
-    return '<i>' + tab.hostname + tab.suffix + '</i>' + tab.pathname;
+    return '<i>' + tab.hostname + '</i>' + tab.pathname;
   }
 }
 
@@ -137,7 +126,7 @@ function handleFaviconLoadfailure(event) {
   // Unset the favicon url for this elem to avoid trying to refetch the favicon
   _tabs[t.offsetParent.parentNode.dataset.index].favIconUrl = '';
   t.offsetParent.className += ' not-found';
-  t.remove()
+  t.remove();
 }
 
 function createButtonHTML(tab, idx) {
@@ -156,10 +145,10 @@ function generateFavicon(tab) {
   if (tab.windowId === _currentTab.windowId) {
     addClass(tab.buttonHTML, 'current');
   }
-  if (tab.favIconUrl) {
+  var iconData = _favIcons[tab.favIconUrl].data;
+  if (typeof iconData === 'string') {
     var img = document.createElement('img');
-    img.src = tab.favIconUrl;
-    img.addEventListener("error", handleFaviconLoadfailure);
+    img.src = iconData;
     favIcon.appendChild(img);
   } else {
     favIcon.className += ' not-found';
@@ -177,12 +166,24 @@ function appendAllTabs() {
     var c = button.children;
     setDomAttrs(button, i, c[0], c[1], tab);
     l.appendChild(button);
-    if (!tab.favicon) {
-      setTimeout(generateFavicon, 20 * i, tab);
-    }
+    // if (!tab.favicon) {
+    //   setTimeout(generateFavicon, 20 * i, tab);
+    // }
   }
   setActive(0);
+  chrome.runtime.sendMessage({ type: 'loadFavIcons' }, function (favIcons) {
+    _favIcons = favIcons;
+    addFavicons();
+  });
 }
+
+function addFavicons() {
+  var l = _elem.list;
+  for (var i = 0; i < _tabs.length; i++) {
+    generateFavicon(_tabs[i]);
+  }
+}
+
 
 function cleanTabList() {
   var l = _elem.list;
@@ -199,7 +200,8 @@ function init() {
   };
 
   // get previous tab from tabHistory
-  chrome.runtime.sendMessage({type: 'getInfo'}, setInfo);
+  console.log('popup: first')
+  chrome.runtime.sendMessage({type: 'loadPopup'}, setInfo);
 
   // Start the update
   setInterval(update, 35);
@@ -338,7 +340,6 @@ function refreshInputMatching() {
       tab.partial = true;
       setMatchCss(tab.buttonHTML, 'partial');
     }
-    tab.titleHTML = tab.titleHTML;
   }
   if (noMatch) {
     // set class no match on input
@@ -385,9 +386,9 @@ function openActiveTab() {
   var activeTab = _tabs[_active];
   if (activeTab.windowId !== _currentTab.windowId) {
     chrome.windows.update(activeTab.windowId, { 'focused': true });
-    window.close();
   }
   chrome.tabs.update(activeTab.id, { 'active': true });
+  window.close();
 }
 
 function closeTabs(tabs, cb) {
