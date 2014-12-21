@@ -3,12 +3,14 @@
  ******************************************************************************/
 
 var _currentTab = {};
+var _switcher = null;
 var _opts = {
-  mod: 'altKey',
   disableBackward: false,
-  allWindows: true,
   hideIncognito: true,
-}
+  allWindows: true,
+  mod: 'altKey',
+};
+
 var _normalizeMap = {
   'á': 'a', 'ă': 'a', 'ắ': 'a', 'ặ': 'a', 'ằ': 'a', 'ẳ': 'a', 'ẵ': 'a',
   'ǎ': 'a', 'â': 'a', 'ấ': 'a', 'ậ': 'a', 'ầ': 'a', 'ẩ': 'a', 'ẫ': 'a',
@@ -286,8 +288,15 @@ var TabList = (function () {
     }
   };
 
+  TabList.closeAndDelete = function (tabId) {
+    console.log('close ye', tabId);
+    if (wrongType(tabId, ['number', 'string'])) { return; }
+    chrome.tabs.remove(tabId);
+    delete TabList[tabId];
+  };
+
   // Del tab
-  TabList.del = function (tabId) {
+  TabList.del = function (tabId, forceClose) {
     if (wrongType(tabId, ['number', 'string'])) { return; }
     delete TabList[tabId];
   };
@@ -385,7 +394,12 @@ var FavIcons = (function() {
 
 function setWatchTab(tab) {
   if (wrongType(tab, 'object')) { return; }
-  var foundTab = (TabList[(tab.tabId || tab[0].id)] || TabList.add(tab));
+  var id = (tab.tabId || tab[0].id);
+  if (_switcher && (id !== _switcher.id)) {
+    TabList.closeAndDelete(_switcher.id);
+    _switcher = null;
+  }
+  var foundTab = (TabList[id] || TabList.add(tab));
   if (!foundTab) {
     return console.error(new Error('Tab not generated wut wut ??'), tab);
   }
@@ -467,7 +481,20 @@ chrome.tabs.onRemoved.addListener(TabList.del);
 (function () {
   var handler = {
     "switch_between_tabs": function () {
-      chrome.tabs.sendMessage(_currentTab.id, 'switch_between_tabs');
+      var w = 640;
+      var h = 320;
+      chrome.windows.create({
+        'url': 'switch.html',
+        'type': 'popup',
+        'width': w,
+        'height': h,
+        'left': ~~((screen.width/2)-(w/2)),
+        'top': ~~((screen.height/2)-(h/2))
+      }, function(window) {
+        setTimeout(function() {
+          _switcher = window.tabs ? window.tabs[0] : null;
+        }, 75);
+      });
     },
     "default": function (command) {
       console.warn('Unhandled command: ' + command);
