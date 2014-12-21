@@ -1,6 +1,6 @@
 ﻿var G = {
   'delayInit': [],
-  'tabs':
+  'opts': {},
 };
 
 
@@ -56,10 +56,17 @@ _delayInit.push(function () {
   });
 });
 
-
-chrome.runtime.sendMessage({type: 'loadPopup'}, function (info) {
-  _currentTab = info.currentTab;
+chrome.runtime.sendMessage({ type: 'loadSwitcher' }, function (info) {
+  G.opts = info.opts;
+  G.currentTab = info.currentTab;
   Switcher.generate(info.tabs);
+});
+
+_delayInit.push(function () {
+  chrome.runtime.sendMessage({ type: 'loadFavIcons' }, function (favIcons) {
+    _favIcons = favIcons;
+    addFavicons();
+  });
 });
 
 /*******************************************************************************

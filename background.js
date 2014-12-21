@@ -462,6 +462,17 @@ chrome.tabs.onRemoved.addListener(TabList.del);
         });
       });
     },
+
+    'loadSwitcher': function (req, callback) {
+      TabList.export(function (tabs) {
+        callback({
+          'tabs': tabs,
+          'opts': _opts,
+          'currentTab': _currentTab
+        });
+      });
+    },
+
     'loadOpts':     function (req, callback) { callback(_opts); },
     'loadFavIcons': function (req, callback) { callback(FavIcons.all); },
     'loadTabs':     function (req, callback) { TabList.export(callback); },
