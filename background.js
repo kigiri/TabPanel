@@ -4,7 +4,7 @@
 
 var _currentTab = {};
 var _opts = {
-  mod: 'AltKey',
+  mod: 'altKey',
   disableBackward: false,
   allWindows: true,
   hideIncognito: true,
@@ -491,7 +491,7 @@ chrome.commands.getAll(function (commands) {
   // Set used the modifiers
   for (var i = 0; i < switchShortcut.length; i++) {
     switch (switchShortcut[i]) {
-      case 'Ctrl' : _opts.mod = 'ControlKey'; break;
+      case 'Ctrl' : _opts.mod = 'controlKey'; break;
       case 'Shift': _opts.disableBackward = true;
         // I should alert the user that shift is used to go backward in the
         // tab cycle, and so using it will disable this functionality.
