@@ -1,5 +1,3 @@
-// "use strict";
-
 /*******************************************************************************
  * Globals
  ******************************************************************************/
@@ -302,7 +300,7 @@ var TabList = (function () {
  ******************************************************************************/
 
 var FavIcons = (function() {
-  var base = chrome.extension.getURL('favIcons/');
+  var base = chrome.extension.getURL('favicons/');
   var localFavIcons = {
     bookmarks: base + 'IDR_BOOKMARKS_FAVICON.png',
     conflicts: base + 'IDR_CONFLICT_FAVICON.png',
