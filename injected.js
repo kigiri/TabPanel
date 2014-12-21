@@ -90,12 +90,16 @@
     _elem.panel.style.display = 'initial';
     _elem.panel.focus();
     window.addEventListener('click', handleClick);
+    window.addEventListener('keyup', detectModRelease);
+    window.addEventListener('keydown', handleKeys);
   }
 
   function hidePanel() {
     if (!_elem.panel) { return; }
     _elem.panel.style.display = 'none';
     window.removeEventListener('click', handleClick);
+    window.removeEventListener('keyup', detectModRelease);
+    window.removeEventListener('keydown', handleKeys);
   }
 
   function handleClick() {
