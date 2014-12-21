@@ -4,11 +4,16 @@
     _tabs = [], // All tabs, no shit
     _opts = {}, // Extension options
     _idx = -1, // Selected idx
+    _favIcons = {},
     _mod = 'AltKey';
 
   function init() {
     chrome.runtime.sendMessage({ type: 'loadOpts' }, function (opts) {
       _opts = opts;
+    });
+    chrome.runtime.sendMessage({ type: 'loadFavIcons' }, function (favIcons) {
+      _favIcons = favIcons;
+      addFavicons();
     });
     chrome.runtime.onMessage.addListener(function (command) {
       console.log(command);
@@ -36,9 +41,10 @@
     tab.favIcon = true;
     var favIcon = document.createElement('div');
     favIcon.className = 'tab-panel__fav-icon';
-    if (tab.favIconUrl) {
+    var iconData = _favIcons[tab.favIconUrl].data;
+    if (typeof iconData === 'string') {
       var img = document.createElement('img');
-      // img.src = tab.favIconUrl.match(/\/\/.+$/);
+      img.src = iconData;
       img.addEventListener("error", handleFaviconLoadfailure);
       favIcon.appendChild(img);
     } else {
@@ -71,9 +77,13 @@
   }
 
   function generatePanel() {
+    var bg = document.createElement('div');
+    bg.id = 'tab-panel__bg';
     var div = document.createElement('div');
     div.id = 'tab-panel__panel';
     div.appendChild(document.createElement('h3'));
+    // document.body.style.webkitFilter = "blur(5px) grayscale(0.4) opacity(0.7)";
+    // document.body.appendChild(bg);
     document.body.appendChild(div);
     div.addEventListener('keyup', detectModRelease);
     div.addEventListener('keydown', handleKeys);
@@ -95,20 +105,21 @@
   }
 
   function handleClick() {
-    var t = window.event.target; 
-    while (t) {
-      if (t.id === 'tab-panel__panel') { return; }
-      t = t.parentElement;
+    var e = window.event;
+    var t = window.event.target;
+    if (e.offsetY < 0 || e.offsetX < 0
+      || e.offsetY > t.offsetHeight || e.offsetX > t.offsetWidth) {
+      hidePanel();
     }
-    hidePanel();
+    return;
   }
 
   function setSelected(newIdx) {
     // Avoid getting out the range of our tabs
     _idx = Math.max(Math.min(newIdx, _tabs.length - 1), 0);
     var count = tabs.length;
-    var x = _idx % 10;
-    var y = ~~(_idx / 10);
+    var x = _idx % 16;
+    var y = ~~(_idx / 16);
     _elem.selection.style.top = x * 32 + 'px';
     _elem.selection.style.left = y * 32 + 'px';
   }
@@ -121,13 +132,13 @@
       setSelected(_idx - 1);
     },
     38: function () { // Up arrow
-      setSelected(_idx - 10);
+      setSelected(_idx - 16);
     },
     39: function () { // Right arrow
       setSelected(_idx + 1);
     },
     40: function () { // Down arrow
-      setSelected(_idx + 10);
+      setSelected(_idx + 16);
     },
     87: function () { // W
       // close mouseover tab

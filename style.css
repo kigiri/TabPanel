@@ -7,10 +7,8 @@
 .tab-panel__fav-icon {
   float: left;
   height: 16px;
-  left: 0;
-  margin: 14px;
-  position: absolute;
-  top: 0;
+  margin: 6px;
+  position: relative;
   width: 16px;
 }
 
@@ -32,17 +30,40 @@
   font-weight: normal;
   font-family: Consolas, monospace;
 }
-
-#tab-panel__panel {
-  width: 200px;
-  height: 200px;
+#tab-panel__panel::before {
+  content: ' ';
+  position: fixed;
   background: -webkit-linear-gradient(rgb(242, 242, 242), rgb(222, 222, 222));
-  box-shadow: 0 0 600px 550px rgba(127, 127, 127, 0.3),
-              0 1px 1px 0px rgba(0, 0, 0, 0.3);
   border: 1px solid #DFDFDF;
   border-top-color: #FFF;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  
+  padding: 26px;
+  border: 1px solid #bbb;
+  background: #F4F4F4;
+  color: #777;
+  box-shadow: 0 0 0 16px #fff inset,
+              0 0 0 17px #DAD4D4 inset;
+}
+#tab-panel__panel::after {
+  content: '';
+  position: absolute;
+  top: -1000px;
+  bottom: -1000px;
+  left: -10000px;
+  right: -1000px;
+  background: #000;
+  background-color: rgba(0,0,0,0.1);
+  z-index: -1;
+}
+#tab-panel__panel {
+  width: 345px;
   position: fixed;
   top: 50%;
+  padding: 26px;
   left: 50%;
   transform: translate(-50%,-50%);
   zIndex: 99999;
