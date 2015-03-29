@@ -4,92 +4,58 @@
     <title>TabPanel</title>
     <style>
     body {
-      background: -webkit-linear-gradient(whitesmoke, white 18%);
+      /*background: -webkit-linear-gradient(whitesmoke, white 18%);*/
+      /*background: -webkit-linear-gradient(black, rgb(121, 117, 117) 18%);*/
+      padding: 5px;
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      margin: 0;
+      text-align: center;
+      background-color: #1A1A1A;
     }
     button {
-      background-color: #F2F2F2;
-      border: 1px solid #DFDFDF;
-      border-top-color: #FFF;
-      border-radius: 0px;
-      color: rgb(166, 166, 166);
-      height: 46px;
-      margin-left: -1px;
-      padding: 2px;
+      height: 26px;
+      width: 26px;
+      padding: 0px;
       position: relative;
-      text-align: left;
       white-space: nowrap;
-      width: 578px;
       outline: none;
+      border: 1px solid #6B6B6B;
+      background-color: #fff;
+      margin: 2px 4px;
+      border-radius: 50%;
     }
-    button:last-child {
-      border-bottom: none;
-      box-shadow: 0px 6px 26px -16px #333;
-    }
-    button:hover, button:focus {
-      background: -webkit-linear-gradient(rgb(242, 242, 242), rgb(230, 230, 230));
-      border-color: #D8D8D8;
-      border-top-color: #F9F9F9;
-    }
-    button:hover:focus {
-      background: -webkit-linear-gradient(rgb(236, 236, 236), rgb(227, 227, 227));
-    }
-    button i b {
-      color: rgb(82, 108, 239);
-    }
-    span b {
-      color: rgb(143, 121, 186);
-    }
-    h3 b {
-      color: rgb(155, 111, 244);
-    }
-    button i {
-      color: rgb(153, 165, 202);
-      font-style: normal;
-      position: relative;
-    }
-    button i::after {
-      position: absolute;
-      content: '';
-      background: -webkit-linear-gradient(white, transparent);
-      z-index: 999;
-    }
-    .active {
-      border-color: #ECECEC;
-      border-top-color: #FFF;
-      background-color: #FFF;
-    }
-    .active:hover, .active:focus {
-      background: -webkit-linear-gradient(rgb(255, 255, 255), rgb(245, 245, 245));
-    }
-    #list, input {
+    #wrapper, input {
       border-radius: 2px;
     }
-    input {
-      border: 1px solid #DFDFDF;
-      box-shadow: 0px 0px 3px #EDEDED inset;
-      box-sizing: border-box;
-      font-size: 14px;
-      height: 30px;
-      margin-bottom: 10px;
-      outline: 1px solid white;
-      padding: 5px;
-      width: 595px;
+    #wrapper {
+      border: 1px solid #A6A6A6;
+      background-color: rgb(144, 144, 144);
+      position: absolute;
+      top: 40px;
+      bottom: 5px;
+      left: 5px;
+      right: 5px;
+      overflow: hidden;
     }
-    input.disabled {
-      background-color: rgb(244, 244, 244);
-      color: transparent;
-      text-shadow: 0 0 0px rgb(160, 160, 160);
-      outline-offset: 0px;
-    }
-    input.invalid {
-      background-color: rgb(244, 244, 244);
-      outline-offset: 0px;
+    #scroll {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: -30px;
+      padding-right: 30px;
+      overflow-x: hidden;
+      overflow-y: scroll;
     }
     #list {
-      border: 1px solid #DFDFDF;
-      height: 520px;
-      overflow-y: scroll;
-      background-color: rgb(224, 224, 224);
+      left: 0;
+      right: 0;
+      position: absolute;
+      margin: 1px;
     }
     .not-found {
       background-image: url('data:image/gif;base64,R0lGODlhCwAOAKIHAJWVlfn5+fLy85ubnKKiovHx8o6OkP///yH/C1hNUCBEYXRhWE1QPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgNS41LWMwMTQgNzkuMTUxNDgxLCAyMDEzLzAzLzEzLTEyOjA5OjE1ICAgICAgICAiPiA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPiA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtbG5zOnhtcE1NPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvbW0vIiB4bWxuczpzdFJlZj0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL3NUeXBlL1Jlc291cmNlUmVmIyIgeG1wOkNyZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ0MgKFdpbmRvd3MpIiB4bXBNTTpJbnN0YW5jZUlEPSJ4bXAuaWlkOkEyOURGQjdEN0YyQzExRTRBMURCQjgzMEU2ODk1NDFGIiB4bXBNTTpEb2N1bWVudElEPSJ4bXAuZGlkOkEyOURGQjdFN0YyQzExRTRBMURCQjgzMEU2ODk1NDFGIj4gPHhtcE1NOkRlcml2ZWRGcm9tIHN0UmVmOmluc3RhbmNlSUQ9InhtcC5paWQ6QTI5REZCN0I3RjJDMTFFNEExREJCODMwRTY4OTU0MUYiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6QTI5REZCN0M3RjJDMTFFNEExREJCODMwRTY4OTU0MUYiLz4gPC9yZGY6RGVzY3JpcHRpb24+IDwvcmRmOlJERj4gPC94OnhtcG1ldGE+IDw/eHBhY2tldCBlbmQ9InIiPz4B//79/Pv6+fj39vX08/Lx8O/u7ezr6uno5+bl5OPi4eDf3t3c29rZ2NfW1dTT0tHQz87NzMvKycjHxsXEw8LBwL++vby7urm4t7a1tLOysbCvrq2sq6qpqKempaSjoqGgn56dnJuamZiXlpWUk5KRkI+OjYyLiomIh4aFhIOCgYB/fn18e3p5eHd2dXRzcnFwb25tbGtqaWhnZmVkY2JhYF9eXVxbWllYV1ZVVFNSUVBPTk1MS0pJSEdGRURDQkFAPz49PDs6OTg3NjU0MzIxMC8uLSwrKikoJyYlJCMiISAfHh0cGxoZGBcWFRQTEhEQDw4NDAsKCQgHBgUEAwIBAAAh+QQBAAAHACwAAAAACwAOAAADN0i6dH4kSAmaiyUHUCzWXHcMQVZsQDqQ5iStpdnCQm0LwQAEt43yPVwK2NsYiLeA4ehyLZ/QZwIAOw==');
@@ -100,7 +66,7 @@
       float: left;
       height: 16px;
       left: 0;
-      margin: 14px;
+      margin: 4px;
       position: absolute;
       top: 0;
       width: 16px;
@@ -109,45 +75,39 @@
       width: 16px;
       height: 16px;
     }
-    .current .fav-icon, .selected .fav-icon {
-      outline: 1px dotted;
-      outline-offset: 8px;
+    #tab-hostname {
+      color: #666;
     }
-    .current .fav-icon {
-      background-color: rgba(255, 255, 255, 0.8);
-      box-shadow: 0px 0px 15px 5px rgba(255, 255, 255, 0.8);
-      outline-color: rgb(210, 210, 210);
+    #tab-pathname {
+      color: #999;
     }
-    .selected .fav-icon {
-      background-color: rgb(201, 233, 255);
-      box-shadow: 0px 0px 15px 5px rgb(201, 233, 255);
-      outline-color: rgb(81, 141, 221);
-    }
-    .match-partial:not(:hover) div {
-      opacity: 0.5;
-    }
-    .match-partial:not(:hover) h3 {
-      color: rgb(147, 147, 147);
-    }
-    span, h3 {
-      margin: 0 0 0 42px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    h3 {
-      color: black;
-      font-size: 13px;
+    #tab-title {
+      color: white;
+      font-size: 14px;
       font-weight: normal;
+      margin: 0;
+      margin-top: -9px;
+      text-shadow: black 2px 2px 0px,
+                   rgba(0, 0, 0, 0.74) -1px 2px 0px,
+                   rgba(0, 0, 0, 0.68) 2px -1px 0px;
     }
-    span {
+    #tab-url {
       font-size: 11px;
       font-family: Consolas, monospace;
     }
     </style>
   </head>
   <body>
-    <input type="text" id="search" spellcheck="false">
-    <div id="list"></div>
+    <h3 id="tab-title">Test fake title - this is the super title that i like so much</h3>
+    <div id="tab-url">
+      <span id="tab-hostname">google.com</span>
+      <span id="tab-pathname">/this/is/the/page</span>
+    </div>
+    <div id="wrapper">
+      <div id="scroll">
+        <div id="list"></div>
+      </div>
+    </div>
   </body>
   <script src="switcher.js"></script>
 </html>

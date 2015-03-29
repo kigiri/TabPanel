@@ -7,22 +7,53 @@
 /*******************************************************************************
  * Switcher panel
  ******************************************************************************/
-(function () {
-  function cleanup() {
 
+(function () {
+  var list = document.getElementById('list');
+
+  function generateButton(tab, idx) {
+    var button = document.createElement('button');
+    button.id = 'tab-' + idx;
+    button.tab = tab;
+    list.appendChild(button);
+  }
+
+  function handleFaviconLoadfailure(event) {
+    event.target.offsetParent.className += ' not-found';
+    event.target.remove();
+  }
+
+  function generateFavIcon(button, iconInfo) {
+    var favIcon = document.createElement('div');
+    favIcon.className = 'fav-icon';
+    if (typeof iconInfo === 'object') {
+      var img = document.createElement('img');
+      img.className = iconInfo.type;
+      img.src = iconInfo.data;
+      img.addEventListener("error", handleFaviconLoadfailure);
+      favIcon.appendChild(img);
+    } else {
+      favIcon.className += ' not-found';
+    }
+    button.appendChild(favIcon);
   }
 
   window.Switcher = {
-    refresh: function () {
-      cleanup();
-      this.generate();
+    loadFavIcons: function (favIcons) {
+      var buttons = list.childNodes;
+      for (var i = 0; i < buttons.length; i++) {
+        generateFavIcon(buttons[i], favIcons[buttons[i].tab.favIconUrl]);
+      }
     },
-    generate: function () {
-
+    generate: function (tabs) {
+      for (var i = 0; i < tabs.length; i++) {
+        generateButton(tabs[i], i);
+      };
     },
 
   };
 })();
+
 
 /*******************************************************************************
  * Handle Keyboard events
@@ -30,12 +61,14 @@
 
 // Watch for the mod release
 window.addEventListener('keyup', function (e) {
-
+  if (!e[G.opts.mod]) {
+    window.close();
+  }
 });
 
 
 window.addEventListener('keydown', function (e) {
-
+  console.log('keydown', e);
 });
 
 
@@ -43,7 +76,7 @@ window.addEventListener('keydown', function (e) {
  * Handle Click events
  ******************************************************************************/
 
-_delayInit.push(function () {
+G.delayInit.push(function () {
   window.addEventListener('click', function (e) {
     var elem = e.target;
     if (elem.tagName !== "BUTTON") {
@@ -62,11 +95,8 @@ chrome.runtime.sendMessage({ type: 'loadSwitcher' }, function (info) {
   Switcher.generate(info.tabs);
 });
 
-_delayInit.push(function () {
-  chrome.runtime.sendMessage({ type: 'loadFavIcons' }, function (favIcons) {
-    _favIcons = favIcons;
-    addFavicons();
-  });
+G.delayInit.push(function () {
+  chrome.runtime.sendMessage({ type: 'loadFavIcons' }, Switcher.loadFavIcons);
 });
 
 /*******************************************************************************
@@ -75,7 +105,7 @@ _delayInit.push(function () {
 
 // To make the popup open faster, i delayed part of the initilisation.
 setTimeout(function() {
-  for (var i = 0; i < _delayInit.length; i++) {
-    _delayInit[i]();
+  for (var i = 0; i < G.delayInit.length; i++) {
+    G.delayInit[i]();
   }
 }, 75);
