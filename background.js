@@ -167,6 +167,17 @@ function showError() {
  ******************************************************************************/
 
 function updateFavIcon(tab) {
+  if (/^chrome:/.test(tab.url)) {
+    var key = (tab.url.match(/^chrome:\/\/([^\/]+)/) || ['', 'default'])[1];
+    var localUrl = FavIcons.localUrl(key);
+    if (localUrl) {
+      FavIcons.add(key, localUrl, 'chrome');
+    } else {
+      FavIcons.gen(key);
+    }
+    return key;
+  }
+
   if (/^data:image/.test(tab.url)) {
     return tab.id;
   }
@@ -176,18 +187,7 @@ function updateFavIcon(tab) {
     FavIcons.add(hostname, tab.favIconUrl);
     return hostname;
   }
-
-  if (/^chrome:/.test(tab.url)) {
-    var localUrl = FavIcons.localUrl(tab.url);
-    if (localUrl) {
-      FavIcons.add(tab.url, localUrl, 'chrome');
-    } else {
-      FavIcons.gen(tab.url);
-    }
-    return tab.url;
-  }
-
-  if (!tab.favIconUrl || FavIcons.get(tab.favIconUrl) != 'success') {
+  if (!tab.favIconUrl || FavIcons.get(tab.favIconUrl) !== 'success') {
     chrome.tabs.sendMessage(tab.id, FavIcons.gen(hostname));
     return hostname;
   }
