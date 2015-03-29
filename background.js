@@ -148,7 +148,7 @@ function wrongType(arg, type) {
       if (typeof arg === type[i]) { return false; }
     }
   } else if (typeof arg === type) { return false; }
-  console.warn(new Error('Wrong arguments types'));
+  console.warn(new Error('Wrong arguments types'), arg, type);
   return true;
 }
 
@@ -156,6 +156,11 @@ function notInRange(arg, min, max) {
   return ((arg < min) || (arg > max));
 }
 
+function showError() {
+  if (chrome.runtime.lastError) {
+    console.log(chrome.runtime.lastError.message);
+  }
+}
 
 /*******************************************************************************
  * Tab Object and Methods declarations
@@ -215,8 +220,9 @@ Tab.prototype = {
       // it's like favIcon appears out of thin air, it's magic !
       // So i'm overriding the url.
       this.favIconUrl = this.url;
-    } else if (FavIcons.get(this.favIconUrl) !== 'success') {
-      FavIcons.gen(this.hostname);
+    } else if (!this.favIconUrl || FavIcons.get(this.favIconUrl) != 'success') {
+      var dataUrl = FavIcons.gen(this.hostname);
+      chrome.tabs.sendMessage(this.id, dataUrl);
       this.favIconUrl = this.hostname;
     }
     this.hostnameNormalized = normalize(this.hostname);
@@ -334,13 +340,18 @@ var FavIcons = (function() {
   }
 
   function generateFavIcon(key) {
-      if (wrongType(key, 'string')) {
-        key = 'default';
-      }
-      if (storedBase64Icons[key]) { return; }
-      var url = 'data:image/png;base64,' + new Identicon(key, 16).toString();
-      addFavIcon(key, url, 'generated');
+    if (wrongType(key, 'string')) {
+      key = 'default';
     }
+    if (storedBase64Icons[key]) { return storedBase64Icons[key].data; }
+    if (/data\:image/.test(key)) {
+      addFavIcon(key, key, 'generated');
+      return key;
+    }
+    var url = base + new Identicon(key, 16).toString();
+    addFavIcon(key, url, 'generated');
+    return url;
+  }
 
   return {
     all: storedBase64Icons,
