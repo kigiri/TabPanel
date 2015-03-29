@@ -202,7 +202,7 @@ TabInfo = (function () {
       var id = (tab.tabId || tab.id);
       _lastSeen[id] = Date.now();
       _currentTab = {
-        tabId: id,
+        id: id,
         windowId: tab.windowId
       };
     },
@@ -241,7 +241,7 @@ var TabList = (function () {
       var returnArray = [];
       for (var i = 0; i < tabArray.length; i++) {
         var tab = tabArray[i];
-        if (tab.id !== _currentTab.tabId) {
+        if (tab.id !== _currentTab.id) {
           formatTab(tab);
           returnArray.push(tab);
         }
