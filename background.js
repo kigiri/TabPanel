@@ -601,7 +601,7 @@ var Identicon = (function() {
       var bg = image.color(0, 0, 0, 0);
 
       // foreground is last 7 chars as hue at 50% saturation, 70% brightness
-      var rgb = this.hsl2rgb(~~(hash % 360) / 360, 0.5, 0.7);
+      var rgb = this.hsl2rgb(~~(hash % 360) / 360, 0.9, 0.35);
       var fg = image.color(rgb[0], rgb[1], rgb[2]);
 
       // the first 15 characters of the url control the pixels (even/odd)
@@ -626,15 +626,13 @@ var Identicon = (function() {
     },
 
     hash: function (str) {
+      var hash = 0;
       if (wrongType(str, 'string')) { return; }
-      var prev = 5381;
-      var total = 0;
-      for (var i = 0; i < str.length; i++) {
-        var c = str[i].charCodeAt();
-        total = ((prev << 5) + prev) + c;
-        prev = c;
+      for (var i = 0; i <  str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
       }
-      return total;
+      return hash < 0 ? -hash : hash;
     },
 
     // adapted from: https://gist.github.com/aemkei/1325937
