@@ -145,7 +145,12 @@ function generateFavicon(tab) {
   if (tab.windowId === _currentTab.windowId) {
     addClass(tab.buttonHTML, 'current');
   }
-  var iconData = _favIcons[tab.favIconUrl].data;
+  var iconData;
+  if (typeof tab.favIconUrl === 'number') {
+    iconData = tab.url;
+  } else {
+    iconData = _favIcons[tab.favIconUrl].data;
+  }
   if (typeof iconData === 'string') {
     var img = document.createElement('img');
     img.src = iconData;
@@ -200,8 +205,12 @@ function init() {
   };
 
   // get previous tab from tabHistory
-  console.log('popup: first')
-  chrome.runtime.sendMessage({type: 'loadPopup'}, setInfo);
+  chrome.runtime.onMessage.addListener(function (req, sender) {
+    if (req.type === "data") {
+      setInfo(req.data);
+    }
+  });
+  chrome.runtime.sendMessage({type: 'loadPopup'});
 
   // Start the update
   setInterval(update, 35);

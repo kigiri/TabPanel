@@ -166,70 +166,49 @@ function showError() {
  * Tab Object and Methods declarations
  ******************************************************************************/
 
-var Tab = function (tabObject) {
-  this.update(tabObject);
+function updateFavIcon(tab) {
+  if (/^data:image/.test(tab.url)) {
+    return tab.id;
+  }
+  var hostname = (tab.hostname ||
+    (tab.url.match(/(^\S+\/\/)([^\/]+)/) || ['','', tab.url])[2]);
+  if (/^data:/.test(tab.favIconUrl)) {
+    FavIcons.add(hostname, tab.favIconUrl);
+    return hostname;
+  }
+
+  if (/^chrome:/.test(tab.url)) {
+    var localUrl = FavIcons.localUrl(tab.url);
+    if (localUrl) {
+      FavIcons.add(tab.url, localUrl, 'chrome');
+    } else {
+      FavIcons.gen(tab.url);
+    }
+    return tab.url;
+  }
+
+  if (!tab.favIconUrl || FavIcons.get(tab.favIconUrl) != 'success') {
+    chrome.tabs.sendMessage(tab.id, FavIcons.gen(hostname));
+    return hostname;
+  }
+
+  return tab.favIconUrl;
 }
 
-Tab.prototype = {
-  open: function() {
-    if (this.windowId !== _currentTab.windowId) {
-      chrome.windows.update(this.windowId, { 'focused': true });
+TabInfo = (function () {
+  var _lastSeen = {};
+  return {
+    watch: function (tab) {
+      _lastSeen[(tab.tabId || tab.id)] = Date.now();
+    },
+    update: function (tab) {
+      updateFavIcon(tab);
+    },
+    getLastSeen: function (id) {
+      return (_lastSeen[id] || 0);
     }
-    chrome.tabs.update(this.id, { 'active': true });
-  },
-
-  close: function() {
-    chrome.tabs.remove(this.id);
-  },
-
-  watch: function() {
-    this.lastSeen = Date.now();
-    _currentTab = this;
-  },
-
-  flagForUpdate: function() {
-    this.lastUpdate = Date.now();
-  },
-
-  update: function(newValue) {
-    if (wrongType(newValue, 'object')) { return; }
-    for (var key in newValue) {
-      this[key] = newValue[key];
-    }
-    this.lastUpdate = Date.now();
-    this.lastSeen = (this.lastSeen || 0);
-    this.format();
-  },
-
-  format: function() {
-    var url = (this.url.match(/(^\S+\/\/)([^\/]+)(.+)/)
-      || ['', '', this.url, '/']);
-    this.hostname = url[2];
-    this.pathname = url[3];
-    if (/^data:/.test(this.favIconUrl)) {
-      FavIcons.add(this.hostname, this.favIconUrl);
-      this.favIconUrl = this.hostname;
-    } else if (/^chrome:/.test(this.url)) {
-      var localUrl = FavIcons.localUrl(this.url);
-      if (localUrl) {
-        FavIcons.add(this.url, localUrl, 'chrome');
-      } else {
-        FavIcons.gen(this.url);
-      }
-      // Some tabs don't have the favIcon link
-      // it's like favIcon appears out of thin air, it's magic !
-      // So i'm overriding the url.
-      this.favIconUrl = this.url;
-    } else if (!this.favIconUrl || FavIcons.get(this.favIconUrl) != 'success') {
-      var dataUrl = FavIcons.gen(this.hostname);
-      chrome.tabs.sendMessage(this.id, dataUrl);
-      this.favIconUrl = this.hostname;
-    }
-    this.hostnameNormalized = normalize(this.hostname);
-    this.titleNormalized = normalize(this.title);
-    this.pathnameNormalized = normalize(this.pathname);
   }
-};
+})();
 
 
 /*******************************************************************************
@@ -237,74 +216,39 @@ Tab.prototype = {
  ******************************************************************************/
 
 var TabList = (function () {
-  var TabList = {},
-    prevArray = [],
-    lastUpdate = Date.now(),
-    pendingCallbacks = 0;
+  var TabList = {};
 
-  // Filter
-  function currentAndOpts(tab) {
-    if (wrongType(tab, 'object')) { return; }
-    if ((tab.id === _currentTab.id) || (tab.id === undefined)) {
-      return false;
-    }
-    return !(_opts.hideIncognito && tab.incognito);
-  }
-
-  function tryCallback(callback) {
-    if (pendingCallbacks > 0) { return; }
-    callback(prevArray.filter(currentAndOpts));
+  function formatTab(tab) {
+    tab.lastSeen = TabInfo.getLastSeen(tab.id);
+    var url = (tab.url.match(/(^\S+\/\/)([^\/]+)(.+)/) || ['','', tab.url,'/']);
+    tab.hostname = url[2];
+    tab.pathname = url[3];
+    tab.hostnameNormalized = normalize(tab.hostname);
+    tab.titleNormalized = normalize(tab.title);
+    tab.pathnameNormalized = normalize(tab.pathname);
+    tab.favIconUrl = updateFavIcon(tab);
   }
 
   // Export (refetch if need to update, sort and convert to arry of TabList)
   TabList.export = function (callback) {
     if (wrongType(callback, 'function')) { return; }
-    if (pendingCallbacks > 0) { return callback(prevArray); }
-    var generatedArray = [], tab;
-    for (var id in TabList) {
-      tab = TabList[id];
-      if (!(tab instanceof Tab)) { continue; }
-      if (tab.lastUpdate > TabList.lastUpdate) {
-        pendingCallbacks++;
-        chrome.tabs.get(tab.id, function (tabObject) {
-          if (typeof tabObject !== "object") {
-            TabList.remove(tab.id);
-          } else {
-            TabList[tabObject.id].update(tabObject);
+    chrome.tabs.query({}, function (tabArray) {
+      var spliceId = 0;
+      for (var i = 0; i < tabArray.length; i++) {
+        var tab = tabArray[i];
+        if (tab.active) {
+          _currentTab = {
+            tabId: tab.id,
+            windowId: tab.windowId
           }
-          pendingCallbacks--;
-          tryCallback(callback);
-        });
+          spliceId = i;
+        } else {
+          formatTab(tab);
+        }
       }
-      generatedArray.push(tab);
-    }
-    prevArray = generatedArray;
-    tryCallback(callback);
-    lastUpdate = Date.now();
-  };
-
-  // New tab
-  TabList.add = function (tabInfo) {
-    if (wrongType(tabInfo, 'object')) { return; }
-    if (tabInfo instanceof Array) {
-      tabInfo.forEach(TabList.add);
-    } else {
-      TabList[tabInfo.id] = new Tab(tabInfo);
-      return TabList[tabInfo.id];
-    }
-  };
-
-  TabList.closeAndDelete = function (tabId) {
-    console.log('close ye', tabId);
-    if (wrongType(tabId, ['number', 'string'])) { return; }
-    chrome.tabs.remove(tabId);
-    delete TabList[tabId];
-  };
-
-  // Del tab
-  TabList.del = function (tabId, forceClose) {
-    if (wrongType(tabId, ['number', 'string'])) { return; }
-    delete TabList[tabId];
+      tabArray.splice(spliceId, 1);
+      callback(tabArray);
+    });
   };
   return TabList;
 })();
@@ -407,16 +351,22 @@ var FavIcons = (function() {
 
 function setWatchTab(tab) {
   if (wrongType(tab, 'object')) { return; }
-  var id = (tab.tabId || tab[0].id);
+  if (!tab.length) { return; }
+  if (!tab.tabId) {
+    tab = tab[0];
+  }
+  var id = tab.tabId;
   if (_switcher && (id !== _switcher.id)) {
-    TabList.closeAndDelete(_switcher.id);
-    _switcher = null;
+    // debug code :
+    chrome.tabs.get(id, function (tabObject) {
+      console.log(tabObject.url);
+      if (!(/^chrome/.test(tabObject.url))) {
+        TabList.closeAndDelete(_switcher.id);
+        _switcher = null;
+      }
+    });
   }
-  var foundTab = (TabList[id] || TabList.add(tab));
-  if (!foundTab) {
-    return console.error(new Error('Tab not generated wut wut ??'), tab);
-  }
-  foundTab.watch();
+  TabInfo.watch(tab);
 }
 
 chrome.tabs.onActivated.addListener(setWatchTab);
@@ -437,12 +387,7 @@ chrome.windows.onFocusChanged.addListener(function (windowId) {
  ******************************************************************************/
 
 chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabObject) {
-  var tab = TabList[tabId];
-  if ((tab instanceof Tab)) {
-    tab.update(tabObject);
-  } else {
-    TabList.add(tabObject);
-  }
+  TabInfo.update(tabObject);
 });
 
 
@@ -450,14 +395,21 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabObject) {
  * Process new tabs
  ******************************************************************************/
 
-chrome.tabs.onCreated.addListener(TabList.add);
+chrome.tabs.onCreated.addListener(TabInfo.watch);
 
 
 /*******************************************************************************
  * Remove tabs
  ******************************************************************************/
 
-chrome.tabs.onRemoved.addListener(TabList.del);
+chrome.tabs.onRemoved.addListener(TabInfo.watch);
+
+
+/*******************************************************************************
+ * Active tab update
+ ******************************************************************************/
+
+chrome.tabs.onActivated.addListener(TabInfo.watch);
 
 
 /*******************************************************************************
@@ -465,31 +417,24 @@ chrome.tabs.onRemoved.addListener(TabList.del);
  ******************************************************************************/
 
 (function () {
+  function handleResponse(tabs) {
+    chrome.runtime.sendMessage({
+      type: 'data',
+      data: {
+        'tabs': tabs,
+        'map': _normalizeMap,
+        'currentTab': _currentTab
+      }
+    });
+  }
+
   var handlers = {
-    'loadPopup': function (req, callback) {
-      TabList.export(function (tabs) {
-        callback({
-          'tabs': tabs,
-          'map': _normalizeMap,
-          'currentTab': _currentTab
-        });
-      });
-    },
-
-    'loadSwitcher': function (req, callback) {
-      TabList.export(function (tabs) {
-        callback({
-          'tabs': tabs,
-          'opts': _opts,
-          'currentTab': _currentTab
-        });
-      });
-    },
-
-    'loadOpts':     function (req, callback) { callback(_opts); },
-    'loadFavIcons': function (req, callback) { callback(FavIcons.all); },
-    'loadTabs':     function (req, callback) { TabList.export(callback); },
-    'default':      function (req, callback) { return req; }
+    loadSwitcher: function (req, callback) { TabList.export(handleResponse); },
+    loadPopup:    function (req, callback) { TabList.export(handleResponse); },
+    loadOpts:     function (req, callback) { callback(_opts); },
+    loadFavIcons: function (req, callback) { callback(FavIcons.all); },
+    loadTabs:     function (req, callback) { TabList.export(callback); },
+    default:      function (req, callback) { return req; }
   };
 
   chrome.runtime.onMessage.addListener(function (req, sender, callback) {
@@ -504,7 +449,7 @@ chrome.tabs.onRemoved.addListener(TabList.del);
 
 (function () {
   var handler = {
-    "switch_between_tabs": function () {
+    switch_between_tabs: function () {
       var w = 640;
       var h = 320;
       chrome.windows.create({
@@ -520,7 +465,7 @@ chrome.tabs.onRemoved.addListener(TabList.del);
         }, 75);
       });
     },
-    "default": function (command) {
+    default: function (command) {
       console.warn('Unhandled command: ' + command);
     }
   };
@@ -557,15 +502,9 @@ chrome.commands.getAll(function (commands) {
  * Populate tab list
  ******************************************************************************/
 
-chrome.tabs.query({}, TabList.add);
-
-/*******************************************************************************
- * Set current tab
- ******************************************************************************/
-
-chrome.tabs.query({ 'currentWindow': true, 'active': true }, function (tabs) {
-  _currentTab = tabs[0];
-})
+chrome.tabs.query({}, function (tabArray) {
+  tabArray.forEach(TabInfo.update);
+});
 
 
 /*******************************************************************************

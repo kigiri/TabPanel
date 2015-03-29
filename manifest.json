@@ -4,7 +4,7 @@
   "name": "Tab Panel",
   "short_name": "TabPanel",
   "description": "This extension allow you to switch tab easly.",
-  "version": "0.4.0",
+  "version": "0.5.0",
 
   "permissions": [
     "tabs",
@@ -30,16 +30,6 @@
         "chromeos": "Alt+P",
         "linux": "Alt+P",
         "mac": "Alt+P"
-      }
-    },
-    "switch_between_tabs": {
-      "description": "Switch between tabs like Alt+Tab switch between windows.",
-      "suggested_key": {
-        "default": "Alt+T",
-        "windows": "Alt+T",
-        "chromeos": "Alt+T",
-        "linux": "Alt+T",
-        "mac": "Alt+T"
       }
     }
   },
