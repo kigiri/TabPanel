@@ -241,7 +241,7 @@ var TabList = (function () {
       var returnArray = [];
       for (var i = 0; i < tabArray.length; i++) {
         var tab = tabArray[i];
-        if (tab.id !== _currentTab.id) {
+        if (tab.id !== _currentTab.tabId) {
           formatTab(tab);
           returnArray.push(tab);
         }
