@@ -158,7 +158,7 @@ function notInRange(arg, min, max) {
 
 function showError() {
   if (chrome.runtime.lastError) {
-    console.log(chrome.runtime.lastError.message);
+    console.warn(chrome.runtime.lastError.message);
   }
 }
 
@@ -199,7 +199,12 @@ TabInfo = (function () {
   var _lastSeen = {};
   return {
     watch: function (tab) {
-      _lastSeen[(tab.tabId || tab.id)] = Date.now();
+      var id = (tab.tabId || tab.id);
+      _lastSeen[id] = Date.now();
+      _currentTab = {
+        tabId: id,
+        windowId: tab.windowId
+      };
     },
     update: function (tab) {
       updateFavIcon(tab);
@@ -233,21 +238,15 @@ var TabList = (function () {
   TabList.export = function (callback) {
     if (wrongType(callback, 'function')) { return; }
     chrome.tabs.query({}, function (tabArray) {
-      var spliceId = 0;
+      var returnArray = [];
       for (var i = 0; i < tabArray.length; i++) {
         var tab = tabArray[i];
-        if (tab.active) {
-          _currentTab = {
-            tabId: tab.id,
-            windowId: tab.windowId
-          }
-          spliceId = i;
-        } else {
+        if (tab.id !== _currentTab.id) {
           formatTab(tab);
+          returnArray.push(tab);
         }
       }
-      tabArray.splice(spliceId, 1);
-      callback(tabArray);
+      callback(returnArray);
     });
   };
   return TabList;
@@ -336,10 +335,8 @@ var FavIcons = (function() {
       return 'success';
     },
 
-    localUrl: function (url) {
-      var type = url.match(/^chrome:\/\/([^\/]+)/);
-      if (!type) { return; }
-      return localFavIcons[type[1]];
+    localUrl: function (type) {
+      return localFavIcons[type];
     }
   };
 })();
@@ -349,37 +346,7 @@ var FavIcons = (function() {
  * Track watched tabs
  ******************************************************************************/
 
-function setWatchTab(tab) {
-  if (wrongType(tab, 'object')) { return; }
-  if (!tab.length) { return; }
-  if (!tab.tabId) {
-    tab = tab[0];
-  }
-  var id = tab.tabId;
-  if (_switcher && (id !== _switcher.id)) {
-    // debug code :
-    chrome.tabs.get(id, function (tabObject) {
-      console.log(tabObject.url);
-      if (!(/^chrome/.test(tabObject.url))) {
-        TabList.closeAndDelete(_switcher.id);
-        _switcher = null;
-      }
-    });
-  }
-  TabInfo.watch(tab);
-}
-
-chrome.tabs.onActivated.addListener(setWatchTab);
-
-// On window focus change
-chrome.windows.onFocusChanged.addListener(function (windowId) {
-  // get active tab
-  var queryInfo = {
-    'windowId': windowId,
-    'active': true
-  };
-  chrome.tabs.query(queryInfo, setWatchTab);
-});
+chrome.tabs.onActivated.addListener(TabInfo.watch);
 
 
 /*******************************************************************************
@@ -387,29 +354,31 @@ chrome.windows.onFocusChanged.addListener(function (windowId) {
  ******************************************************************************/
 
 chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabObject) {
-  TabInfo.update(tabObject);
+  if (changeInfo.status === 'complete') {
+    setTimeout(TabInfo.update, 2000, tabObject);
+  }
 });
 
+/*******************************************************************************
+ * Set current tab
+ ******************************************************************************/
+
+chrome.tabs.query({ 'currentWindow': true, 'active': true }, function (tabs) {
+  _currentTab = tabs[0];
+})
 
 /*******************************************************************************
  * Process new tabs
  ******************************************************************************/
 
-chrome.tabs.onCreated.addListener(TabInfo.watch);
+chrome.tabs.onCreated.addListener(TabInfo.update);
 
 
 /*******************************************************************************
  * Remove tabs
  ******************************************************************************/
 
-chrome.tabs.onRemoved.addListener(TabInfo.watch);
-
-
-/*******************************************************************************
- * Active tab update
- ******************************************************************************/
-
-chrome.tabs.onActivated.addListener(TabInfo.watch);
+chrome.tabs.onRemoved.addListener(TabInfo.update);
 
 
 /*******************************************************************************
@@ -533,7 +502,6 @@ var Identicon = (function() {
 
     render: function () {
       var hash = this.hash(this.url);
-      // console.log(this.url, hash);
       var image = new PNGlib(16, 16, 256);
 
       // light-grey background

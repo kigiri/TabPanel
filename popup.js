@@ -27,7 +27,7 @@ function normalize(str) {
 }
 
 // info on currentTab
-var _currentTab = null;
+var _currentWindowId = null;
 var _opts = {
   // Hide private navigation tabs form the results
   hideIncognito: true
@@ -38,7 +38,7 @@ _elem.search.focus();
 
 function setInfo(bgInfo) {
   _normalizeMap = bgInfo.map;
-  _currentTab = bgInfo.currentTab;
+  _currentWindowId = bgInfo.currentTab.windowId;
   _tabs = bgInfo.tabs;
   _tabs.forEach(createButtonHTML);
   showTabs(initialTabsSort);
@@ -73,10 +73,10 @@ function initialTabsSort(a, b) {
     return b.lastSeen - a.lastSeen;
   }
   if (a.windowId !== b.windowId) {
-    if (a.windowId === _currentTab.windowId) {
+    if (a.windowId === _currentWindowId) {
       return -1;
     }
-    if (b.windowId === _currentTab.windowId) {
+    if (b.windowId === _currentWindowId) {
       return 1;
     }
     return b.windowId - a.windowId;
@@ -142,7 +142,7 @@ function generateFavicon(tab) {
   tab.favicon = true;
   var favIcon = document.createElement('div');
   favIcon.className = 'fav-icon';
-  if (tab.windowId === _currentTab.windowId) {
+  if (tab.windowId === _currentWindowId) {
     addClass(tab.buttonHTML, 'current');
   }
   var iconData;
@@ -301,6 +301,7 @@ function applyArrayToHTML(arr, baseStr) {
 
 function fuzzyMatchString(tab, key, pattern) {
   var str = tab[key + 'Normalized'];
+  if (!str) { return 0; }
   var bestMatch = fuzzyMatch(str, pattern, 0, 0, 0, 8, [], 6);
   tab.score += bestMatch.score;
   tab[key + 'HTML'] = applyArrayToHTML(bestMatch.matched, tab[key]);
@@ -393,10 +394,10 @@ function setActive(idx) {
 // Chrome Tabs Actions
 function openActiveTab() {
   var activeTab = _tabs[_active];
-  if (activeTab.windowId !== _currentTab.windowId) {
+  chrome.tabs.update(activeTab.id, { 'active': true });
+  if (activeTab.windowId !== _currentWindowId) {
     chrome.windows.update(activeTab.windowId, { 'focused': true });
   }
-  chrome.tabs.update(activeTab.id, { 'active': true });
   window.close();
 }
 
