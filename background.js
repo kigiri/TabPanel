@@ -341,6 +341,9 @@ var FavIcons = (function() {
   };
 })();
 
+function delayFavIconLoad(arg) {
+  setTimeout(TabInfo.update, 2000, arg);
+}
 
 /*******************************************************************************
  * Track watched tabs
@@ -355,7 +358,7 @@ chrome.tabs.onActivated.addListener(TabInfo.watch);
 
 chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabObject) {
   if (changeInfo.status === 'complete') {
-    setTimeout(TabInfo.update, 2000, tabObject);
+    delayFavIconLoad(tabObject);
   }
 });
 
@@ -371,7 +374,7 @@ chrome.tabs.query({ 'currentWindow': true, 'active': true }, function (tabs) {
  * Process new tabs
  ******************************************************************************/
 
-chrome.tabs.onCreated.addListener(TabInfo.update);
+chrome.tabs.onCreated.addListener(delayFavIconLoad);
 
 
 /*******************************************************************************
