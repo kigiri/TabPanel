@@ -209,6 +209,10 @@ TabInfo = (function () {
     update: function (tab) {
       updateFavIcon(tab);
     },
+    cleanup: function (tab) {
+      // for now, no clean up :D
+      // let's be messy hehehe like lionel messi
+    },
     getLastSeen: function (id) {
       return (_lastSeen[id] || 0);
     }
@@ -381,7 +385,7 @@ chrome.tabs.onCreated.addListener(delayFavIconLoad);
  * Remove tabs
  ******************************************************************************/
 
-chrome.tabs.onRemoved.addListener(TabInfo.update);
+chrome.tabs.onRemoved.addListener(TabInfo.cleanup);
 
 
 /*******************************************************************************
