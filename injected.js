@@ -2,31 +2,67 @@
  * Listen for favicons injection
  ******************************************************************************/
 (function () {
-  var faviconInserted = true;
-  function getFavicon() {
-    var links = document.getElementsByTagName('link');
-    var regexp = /(^| )icon( |$)/i;
+  var faviconState = 'loading';
+  var links = document.getElementsByTagName("link");
+  var domainFaviconUrl = window.location.origin + '/favicon.ico';
+  var storedDataUrl = null;
+  var icon;
+  var regexp = /(^| )icon( |$)/i;
 
-    for (var i = 0; i < links.length; i++) {
-        var link = links[i];
-        if (regexp.test(links[i].rel)) {
-          return links[i].href;
-        }
+  function testUrl(url, success, fallback) {
+    console.log('testing for', url);
+    faviconState = 'checking';
+    var img = new Image();
+    img.src = url;
+    img.onerror = img.onabort = fallback;
+    img.onload = success;
+  }
+
+  function testDomain() {
+    testUrl(domainFaviconUrl, function () {
+      faviconState = 'loaded';
+      icon.href = domainFaviconUrl;
+    }, function () {
+      faviconState = 'failed';
+      if (storedDataUrl) {
+        icon.href = storedDataUrl;
+        icon.type = "image/png";
+      }
+    });
+  }
+
+  var favIconFound = false;
+  for (var i = 0; i < links.length; i++) {
+    if (regexp.test(links[i].rel)) {
+      favIconFound = true;
+      icon = links[i];
+      if (icon.href === domainFaviconUrl) {
+        testDomain();
+      } else {
+        testUrl(icon.href, function () {
+          faviconState = 'loaded';
+        }, testDomain);
+      }
+      break;
     }
-    return null;
+  }
+  if (!favIconFound) {
+    icon = document.createElement("link");
+    icon.rel = "shortcut icon";
+    icon.type = "image/x-icon";
+    document.head.appendChild(icon);
+    testDomain();
   }
 
   chrome.runtime.onMessage.addListener(function (dataUrl, req, callback) {
-    if (faviconInserted) { return; }
-    var icon = document.createElement("link");
-    icon.rel = "shortcut icon";
-    icon.type = "image/png";
-    icon.href = dataUrl;
-    document.head.appendChild(icon);
-    faviconInserted = true;
+    console.log(icon, faviconState);
+    if (faviconState !== 'loaded') {
+      if (faviconState === 'failed') {
+        icon.href = dataUrl;
+        icon.type = "image/png";
+      } else {
+        storedDataUrl = dataUrl;
+      }
+    }
   });
-
-  if (getFavicon()) {
-    faviconInserted = true;
-  }
 })();
