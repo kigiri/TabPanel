@@ -38,7 +38,7 @@ _elem.search.focus();
 
 function getTabIndex(id) {
   for (var i = 0; i < _tabs.length; i++) {
-    if (tabs[i].id === id) {
+    if (_tabs[i].id === id) {
       return i;
     }
   }
@@ -46,7 +46,7 @@ function getTabIndex(id) {
 }
 
 function getTab(id) {
-  return tabs[getTabIndex(id)];
+  return _tabs[getTabIndex(id)];
 }
 
 function setInfo(bgInfo) {
