@@ -36,6 +36,19 @@ var _opts = {
 // Activate focus on popup opening
 _elem.search.focus();
 
+function getTabIndex(id) {
+  for (var i = 0; i < _tabs.length; i++) {
+    if (tabs[i].id === id) {
+      return i;
+    }
+  }
+  return 0;
+}
+
+function getTab(id) {
+  return tabs[getTabIndex(id)];
+}
+
 function setInfo(bgInfo) {
   _normalizeMap = bgInfo.map;
   _currentWindowId = bgInfo.currentTab.windowId;
@@ -60,7 +73,7 @@ function toTabIdArray(tab) {
   return tab.id;
 }
 
-function filterAndDestroySelected(tab) {
+function filterOutAndRemoveSelected(tab) {
   if (tab.isUserSelected) {
     _elem.list.removeChild(tab.buttonHTML);
     return false;
@@ -68,32 +81,30 @@ function filterAndDestroySelected(tab) {
   return true;
 }
 
+function filterSelected(tab) {
+  return !tab.isUserSelected;
+}
+
 function initialTabsSort(a, b) {
-  if (a.lastSeen || b.lastSeen) {
-    return b.lastSeen - a.lastSeen;
+  if (a.open.time || b.open.time) {
+    if (a.open.fresh) {
+      if (b.open.fresh) { return a.open.time - b.open.time; }
+      return -1;
+    } else if (b.open.fresh) { return 1; }
+    return b.open.time - a.open.time;
   }
   if (a.windowId !== b.windowId) {
-    if (a.windowId === _currentWindowId) {
-      return -1;
-    }
-    if (b.windowId === _currentWindowId) {
-      return 1;
-    }
+    if (a.windowId === _currentWindowId) { return -1; }
+    if (b.windowId === _currentWindowId) { return  1; }
     return b.windowId - a.windowId;
   }
-  return a.index - b.index;
+  return a.id - b.id;
 }
 
 function scoreTabsSort(a, b) {
-  if (b.partial && !a.partial) {
-    return -1;
-  }
-  if (a.partial && !b.partial) {
-    return 1;
-  }
-  if (b.score !== a.score) {
-    return b.score - a.score;
-  }
+  if (b.partial && !a.partial) { return -1; }
+  if (a.partial && !b.partial) { return  1; }
+  if (b.score !== a.score) { return b.score - a.score; }
   return initialTabsSort(a, b);
 }
 
@@ -110,10 +121,8 @@ function makeUrl(tab) {
   }
 }
 
-function setDomAttrs(button, idx, title, url, tab) {
-  button.id = 'tab-' + idx;
-  button.dataset.index = idx;
-  delClass(button, 'active');
+function setDomAttrs(button, title, url, tab) {
+  button.id = 'tab-' + tab.id;
   if (!_prevInputValue.length) {
     setMatchCss(button, 'full');
   }
@@ -124,12 +133,12 @@ function setDomAttrs(button, idx, title, url, tab) {
 function handleFaviconLoadfailure(event) {
   var t = event.target;
   // Unset the favicon url for this elem to avoid trying to refetch the favicon
-  _tabs[t.offsetParent.parentNode.dataset.index].favIconUrl = '';
+  _tabs[getTabIndex(t.offsetParent.parentNode.dataset.id)].favIconUrl = '';
   t.offsetParent.className += ' not-found';
   t.remove();
 }
 
-function createButtonHTML(tab, idx) {
+function createButtonHTML(tab) {
   var button = document.createElement('button');
   button.dataset.id = tab.id;
   button.appendChild(document.createElement('h3'));
@@ -143,7 +152,7 @@ function generateFavicon(tab) {
   var favIcon = document.createElement('div');
   favIcon.className = 'fav-icon';
   if (tab.windowId === _currentWindowId) {
-    addClass(tab.buttonHTML, 'current');
+    tab.buttonHTML.classList.add('current');
   }
   var iconData;
   if (typeof tab.favIconUrl === 'number') {
@@ -169,7 +178,7 @@ function appendAllTabs() {
     var tab = _tabs[i];
     var button = tab.buttonHTML;
     var c = button.children;
-    setDomAttrs(button, i, c[0], c[1], tab);
+    setDomAttrs(button, c[0], c[1], tab);
     l.appendChild(button);
     // if (!tab.favicon) {
     //   setTimeout(generateFavicon, 20 * i, tab);
@@ -308,28 +317,14 @@ function fuzzyMatchString(tab, key, pattern) {
   return bestMatch.partial ? 0 : 1;
 }
 
-function addClass(elem, cssClass) {
-  if (elem.className.indexOf(cssClass) === -1) {
-    elem.className = elem.className.replace(/\s*$/, ' ' + cssClass);
-  }
-}
-
-function delClass(elem, cssClass) {
-  elem.className = elem.className.replace(new RegExp(cssClass, 'ig'), '');
-}
-
 function setMatchCss(button, type) {
-  var newclass = button.className.replace(/match-([^\s-]+)/, 'match-' + type);
-  if (!/match-/.test(newclass)) {
-    button.className += ' match-' + type;
-  } else {
-    button.className = newclass;
-  }
+  button.classList.remove('match-'+ (type === 'full' ? 'partial' : 'full'));
+  button.classList.add('match-'+ type);
 }
 
 function refreshInputMatching() {
   if (typeof _prevInputValue !== 'string' || !_prevInputValue.length) {
-    delClass(_input, 'invalid');
+    _input.classList.remove('invalid');
     return showTabs(initialTabsSort);
   }
   var pattern = normalize(_prevInputValue.toLowerCase()).replace(/-/g, '');
@@ -353,10 +348,10 @@ function refreshInputMatching() {
   }
   if (noMatch) {
     // set class no match on input
-    addClass(_input, 'invalid');
+    _input.classList.add('invalid');
   } else {
     showTabs(scoreTabsSort);
-    delClass(_input, 'invalid');
+    _input.classList.remove('invalid');
   }
 }
 
@@ -381,11 +376,11 @@ function setActive(idx) {
 
   var lastTab = _tabs[_active];
   if (lastTab !== undefined) {
-    delClass(lastTab.buttonHTML, 'active');
+    lastTab.buttonHTML.classList.remove('active');
   }
 
   var btn = _tabs[idx].buttonHTML;
-  addClass(btn, 'active');
+  btn.classList.add('active');
   _active = idx;
 
   scrollTo(btn);
@@ -401,43 +396,48 @@ function openActiveTab() {
   window.close();
 }
 
-function closeTabs(tabs, cb) {
-  chrome.tabs.remove(tabs.map(toTabIdArray), cb);
-};
-
 // Handle Select Actions
 function getAllSelectedTabs() {
   return _tabs.filter(onlySelectedTabsFilter);
 }
 
 function closeSelectedTabs() {
-  var selectedTabs = getAllSelectedTabs();
-
-  closeTabs(selectedTabs, function () {
-    _tabs = _tabs.filter(filterAndDestroySelected);
+  chrome.tabs.remove(getAllSelectedTabs().map(toTabIdArray), function () {
+    _tabs = _tabs.filter(filterOutAndRemoveSelected);
     refreshInputMatching();
   });
 }
 
-function moveSelectedTabs() {
-  // Move tabs to a new or existing window
-}
-
-function unselectTab(tab) {
-  tab.isUserSelected = false;
-  delClass(tab.buttonHTML, 'selected');
+function closeTab(id) {
+  chrome.tabs.remove(id, function () {
+    _tabs = _tabs.filter(function (tab) {
+      if (tab.id !== id) { return true; }
+      _elem.list.removeChild(tab.buttonHTML);
+      return false;
+    });
+  });
 }
 
 function setSelectingState(state) {
   if (state !== _isSelecting) {
     // New state, apply change
     if (state) {
-      addClass(_input, 'disabled');
+      _input.classList.add('disabled');
     } else {
-      delClass(_input, 'disabled');
+      _input.classList.remove('disabled');
     }
   }
   _isSelecting = state;
+}
+
+function unselectTab(tab) {
+  tab.isUserSelected = false;
+  tab.buttonHTML.classList.remove('selected');
+}
+
+function selectTab(tab) {
+  tab.isUserSelected = true;
+  tab.buttonHTML.classList.add('selected');
 }
 
 function unselectAllTabs() {
@@ -445,16 +445,41 @@ function unselectAllTabs() {
   setSelectingState(false);
 }
 
+function selectMatchedTabs() {
+  if (!_input.value) { return; }
+  _tabs.forEach(function (tab) {
+    if (tab.partial === false) {
+      selectTab(tab);
+    }
+  })
+}
+
+function moveSelectedTabs() {
+  // Move tabs to the current window
+  console.log('moving to', _currentWindowId);
+  var selectedTabs = getAllSelectedTabs();
+  chrome.tabs.move(selectedTabs.map(toTabIdArray), {
+    index: -1,
+    windowId: _currentWindowId
+  }, function () {
+    selectedTabs.forEach(function (tab) {
+      unselectTab(tab);
+      tab.windowId = _currentWindowId;
+      tab.buttonHTML.classList.add('current');
+    });
+    setSelectingState(false);
+    refreshInputMatching();
+    _input.select();
+  });
+}
+
 function toggleSelectActiveTab() {
   var activeTab = _tabs[_active];
   if (!activeTab) { return; }
-  var btn = activeTab.buttonHTML;
   if (activeTab.isUserSelected) {
-    activeTab.isUserSelected = false;
-    delClass(btn, 'selected');
+    unselectTab(activeTab);
   } else {
-    activeTab.isUserSelected = true;
-    addClass(btn, 'selected');
+    selectTab(activeTab);
   }
   setSelectingState(!!(getAllSelectedTabs().length));
 }
@@ -468,31 +493,45 @@ function update() {
 }
 
 // Handle inputs
-_actions[9]  = function (e) { // Key Tab
-  if (_active === -1) { return; }
-  e.preventDefault();
-  toggleSelectActiveTab();
-};
-_actions[13] = openActiveTab; // Key Enter
-_actions[27] = function (e) { // Key esc
-  if (_isSelecting) {
+_actions = {
+  09: function (e) {  // Key Tab
+    if (_active === -1) { return; }
     e.preventDefault();
-    unselectAllTabs();
-  }
-};
-_actions[87] = function (e) { // Key W
-  if (_isSelecting) {
+    toggleSelectActiveTab();
+  },
+  13: openActiveTab,  // Key Enter
+  27: function (e) {  // Key esc
+    if (_isSelecting) {
+      e.preventDefault();
+      unselectAllTabs();
+    }
+  },
+  38: function (e) {  // key Up
+    setActive(_active - 1);
     e.preventDefault();
-    closeSelectedTabs();
+  },
+  40: function (e) {  // key Down
+    setActive(_active + 1);
+    e.preventDefault();
+  },
+  65: function (e) {  // Key A
+    if (_isSelecting) {
+      e.preventDefault();
+      selectMatchedTabs();
+    }
+  },
+  77: function (e) {  // key M
+    if (_isSelecting) {
+      e.preventDefault();
+      moveSelectedTabs();
+    }
+  },
+  87: function (e) {  // Key W
+    if (_isSelecting) {
+      e.preventDefault();
+      closeSelectedTabs();
+    }
   }
-};
-_actions[40] = function (e) {  // key Down
-  setActive(_active + 1);
-  e.preventDefault();
-};
-_actions[38] = function (e) {  // key Up
-  setActive(_active - 1);
-  e.preventDefault();
 };
 
 _elem.search.onkeydown = function (e) {
@@ -503,17 +542,32 @@ _elem.search.onkeydown = function (e) {
   if (_isSelecting) {
     e.preventDefault();
   }
-}
+};
 
-document.body.onclick = function (e) {
-  var elem = e.target;
+function checkClickedElement(elem) {
   if (elem.tagName !== "BUTTON") {
     elem = elem.offsetParent;
-    if (elem.tagName !== "BUTTON") { return; }
+    if (elem.tagName !== "BUTTON") { return false; }
   }
-  var idx = elem.dataset.index;
-  setActive(idx);
-  openActiveTab();
+  return elem;
 }
+
+document.body.onmousedown = function (e) {
+  if (checkClickedElement(e.target) && e.which === 2) {
+    return false;
+  }
+};
+
+document.body.onmouseup = function (e) {
+  var elem = checkClickedElement(e.target);
+  if (!elem) { return; }
+  if (e.which === 2) {
+    closeTab(parseInt(elem.dataset.id));
+    e.preventDefault();
+  } else if (e.which === 1) {
+    setActive(getTabIndex(elem.dataset.id));
+    openActiveTab(); 
+  }
+};
 
 init();

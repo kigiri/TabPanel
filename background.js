@@ -196,25 +196,34 @@ function updateFavIcon(tab) {
 }
 
 TabInfo = (function () {
-  var _lastSeen = {};
+  var _openInfo = {};
+  function getDefaultTimeInfo() { return { time: 0, fresh: false }; }
   return {
-    watch: function (tab) {
-      var id = (tab.tabId || tab.id);
-      _lastSeen[id] = Date.now();
+    add: function (tab) {
+      _openInfo[(tab.tabId || tab.id)] = {
+        time: Date.now(),
+        fresh: true
+      }
+      setTimeout(updateFavIcon, 2000, tab);
+    },
+    watch: function (id, windowId) {
+      _openInfo[id] = {
+        time: Date.now(),
+        fresh: false
+      };
       _currentTab = {
         id: id,
-        windowId: tab.windowId
+        windowId: windowId
       };
     },
-    update: function (tab) {
-      updateFavIcon(tab);
-    },
+    update: updateFavIcon,
     cleanup: function (tab) {
       // for now, no clean up :D
       // let's be messy hehehe like lionel messi
     },
-    getLastSeen: function (id) {
-      return (_lastSeen[id] || 0);
+    getOpenInfo: function (id) {
+      if (typeof _openInfo[id] !== 'object') { _openInfo[id] = getDefaultTimeInfo(); }
+      return _openInfo[id];
     }
   }
 })();
@@ -228,7 +237,7 @@ var TabList = (function () {
   var TabList = {};
 
   function formatTab(tab) {
-    tab.lastSeen = TabInfo.getLastSeen(tab.id);
+    tab.open = TabInfo.getOpenInfo(tab.id);
     var url = (tab.url.match(/(^\S+\/\/)([^\/]+)(.+)/) || ['','', tab.url,'/']);
     tab.hostname = url[2];
     tab.pathname = url[3];
@@ -345,15 +354,21 @@ var FavIcons = (function() {
   };
 })();
 
-function delayFavIconLoad(arg) {
-  setTimeout(TabInfo.update, 2000, arg);
-}
 
 /*******************************************************************************
  * Track watched tabs
  ******************************************************************************/
 
-chrome.tabs.onActivated.addListener(TabInfo.watch);
+chrome.windows.onFocusChanged.addListener(function () {
+  chrome.tabs.query({active: true, currentWindow: true}, function(tabArray) {
+    if (!tabArray.length) { return; }
+    TabInfo.watch(tabArray[0].id, tabArray[0].windowId);
+  });
+});
+
+chrome.tabs.onActivated.addListener(function (info) {
+  TabInfo.watch(info.tabId, info.windowId);
+});
 
 
 /*******************************************************************************
@@ -362,9 +377,10 @@ chrome.tabs.onActivated.addListener(TabInfo.watch);
 
 chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabObject) {
   if (changeInfo.status === 'complete') {
-    delayFavIconLoad(tabObject);
+    setTimeout(TabInfo.update, 2000, tabObject);
   }
 });
+
 
 /*******************************************************************************
  * Set current tab
@@ -372,13 +388,13 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabObject) {
 
 chrome.tabs.query({ 'currentWindow': true, 'active': true }, function (tabs) {
   _currentTab = tabs[0];
-})
+});
 
 /*******************************************************************************
  * Process new tabs
  ******************************************************************************/
 
-chrome.tabs.onCreated.addListener(delayFavIconLoad);
+chrome.tabs.onCreated.addListener(TabInfo.add);
 
 
 /*******************************************************************************
