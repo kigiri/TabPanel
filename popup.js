@@ -1,17 +1,11 @@
-﻿// Cached Globals and Aliases
-var _tabs = [];
-var _elem = document.all;
-var _asyncLoadState = 0;
-var _active = -1;
-var _prevTabId = -1;
-var _actions = [];
-var _prevInputValue = '';
-var _isSelecting = false;
-var _input = _elem.search;
-var _normalizeMap = [];
-var _favIcons;
+﻿var $ez = (function () {
 
-function normalize(str) {
+  return {
+
+  };
+})();
+
+$ez.prototype.normalize = function(str) {
   var normalized_str = '';
   var c;
 
@@ -24,7 +18,83 @@ function normalize(str) {
     }
   }
   return (normalized_str);
-}
+};
+
+
+// Cached Globals and Aliases
+var _list = [];
+var _asyncLoadState = 0;
+var _active = -1;
+var _prevTabId = -1;
+var _actions = [];
+var _prevInputValue = '';
+var _isSelecting = false;
+var _normalizeMap = [];
+var _favIcons;
+
+// State shared globals
+var $state = (function () {
+
+  return {
+
+  };
+})();
+
+
+var $list = (function () {
+  var _value = [];
+  function getIndex(value) {
+    var i = -1, len = _value.length;
+    while (++i < len) {
+      if (_value[i] === value) {
+        return _value[i];
+      }
+    }
+    return null;
+  }
+
+  function getIndexWithKey(key, value) {
+    var i = -1, len = _value.length;
+    while (++i < len) {
+      if (_value[i][key] === value) {
+        return _value[i][key];
+      }
+    }
+    return null;
+  }
+
+  return {
+    indexOf: function (key, value, fallback) {
+      var ret = value ? getIndexWithKey(key, value) : getIndex(key);
+      if (value) {
+        ret = getIndexWithKey(key, value);
+        if (ret) { return ret; }
+        if (fallback === 'last') {
+          return _value[_value.length - 1][key];
+        } else if (fallback === 'first') {
+          return _value[0][key];
+        }
+      } else {
+        ret = getIndex(key);
+        if (ret) { return ret; }
+        if (fallback === 'last') {
+          return _value[_value.length - 1];
+        } else if (fallback === 'first') {
+          return _value[0];
+        }
+      }
+      return ret;
+    }
+  };
+})();
+
+
+// FavIcons
+
+// Shorthands
+var $elem = document.all;
+var $input = $elem.search;
+
 
 // info on currentTab
 var _currentWindowId = null;
@@ -34,11 +104,11 @@ var _opts = {
 };
 
 // Activate focus on popup opening
-_elem.search.focus();
+$input.focus();
 
 function getTabIndex(id) {
-  for (var i = 0; i < _tabs.length; i++) {
-    if (_tabs[i].id === id) {
+  for (var i = 0; i < _list.length; i++) {
+    if (_list[i].id === id) {
       return i;
     }
   }
@@ -46,22 +116,22 @@ function getTabIndex(id) {
 }
 
 function getTab(id) {
-  return _tabs[getTabIndex(id)];
+  return _list[getTabIndex(id)];
 }
 
 function setInfo(bgInfo) {
   _normalizeMap = bgInfo.map;
   _currentWindowId = bgInfo.currentTab.windowId;
-  _tabs = bgInfo.tabs;
-  _tabs.forEach(createButtonHTML);
+  _list = bgInfo.tabs;
+  _list.forEach(createButtonHTML);
   showTabs(initialTabsSort);
 }
 
 // Generate tabs
 function showTabs(sortCallback) {
   cleanTabList();
-  _tabs.sort(sortCallback);
-  appendAllTabs(_tabs, sortCallback);
+  _list.sort(sortCallback);
+  appendAllTabs(_list, sortCallback);
 }
 
 // filters, sort and map callbacks
@@ -75,7 +145,7 @@ function toTabIdArray(tab) {
 
 function filterOutAndRemoveSelected(tab) {
   if (tab.isUserSelected) {
-    _elem.list.removeChild(tab.buttonHTML);
+    $elem.list.removeChild(tab.buttonHTML);
     return false;
   }
   return true;
@@ -133,7 +203,7 @@ function setDomAttrs(button, title, url, tab) {
 function handleFaviconLoadfailure(event) {
   var t = event.target;
   // Unset the favicon url for this elem to avoid trying to refetch the favicon
-  _tabs[getTabIndex(t.offsetParent.parentNode.dataset.id)].favIconUrl = '';
+  _list[getTabIndex(t.offsetParent.parentNode.dataset.id)].favIconUrl = '';
   t.offsetParent.className += ' not-found';
   t.remove();
 }
@@ -173,9 +243,9 @@ function generateFavicon(tab) {
 // here I separate domain from url param to fine controle the score later
 
 function appendAllTabs() {
-  var l = _elem.list;
-  for (var i = 0; i < _tabs.length; i++) {
-    var tab = _tabs[i];
+  var l = $elem.list;
+  for (var i = 0; i < _list.length; i++) {
+    var tab = _list[i];
     var button = tab.buttonHTML;
     var c = button.children;
     setDomAttrs(button, c[0], c[1], tab);
@@ -192,15 +262,15 @@ function appendAllTabs() {
 }
 
 function addFavicons() {
-  var l = _elem.list;
-  for (var i = 0; i < _tabs.length; i++) {
-    generateFavicon(_tabs[i]);
+  var l = $elem.list;
+  for (var i = 0; i < _list.length; i++) {
+    generateFavicon(_list[i]);
   }
 }
 
 
 function cleanTabList() {
-  var l = _elem.list;
+  var l = $elem.list;
   while (l.hasChildNodes()) {
     l.removeChild(l.lastChild);
   }
@@ -324,13 +394,13 @@ function setMatchCss(button, type) {
 
 function refreshInputMatching() {
   if (typeof _prevInputValue !== 'string' || !_prevInputValue.length) {
-    _input.classList.remove('invalid');
+    $input.classList.remove('invalid');
     return showTabs(initialTabsSort);
   }
-  var pattern = normalize(_prevInputValue.toLowerCase()).replace(/-/g, '');
+  var pattern = $ez.normalize(_prevInputValue.toLowerCase()).replace(/-/g, '');
   var noMatch = true;
-  for (var i = _tabs.length - 1; i >= 0; i--) {
-    var tab = _tabs[i];
+  for (var i = _list.length - 1; i >= 0; i--) {
+    var tab = _list[i];
     var ret = 0;
     tab.score = 0;
     ret += fuzzyMatchString(tab, 'hostname', pattern);
@@ -348,16 +418,16 @@ function refreshInputMatching() {
   }
   if (noMatch) {
     // set class no match on input
-    _input.classList.add('invalid');
+    $input.classList.add('invalid');
   } else {
     showTabs(scoreTabsSort);
-    _input.classList.remove('invalid');
+    $input.classList.remove('invalid');
   }
 }
 
 // Scroll to element if necessary
 function scrollTo(elem) {
-  var l = _elem.list;
+  var l = $elem.list;
   var min = l.scrollTop
   var max = l.clientHeight + min;
   var offset = elem.offsetTop;
@@ -372,14 +442,14 @@ function scrollTo(elem) {
 
 // Choose active element
 function setActive(idx) {
-  idx = Math.min(Math.max(0, idx), _tabs.length - 1);
+  idx = Math.min(Math.max(0, idx), _list.length - 1);
 
-  var lastTab = _tabs[_active];
+  var lastTab = _list[_active];
   if (lastTab !== undefined) {
     lastTab.buttonHTML.classList.remove('active');
   }
 
-  var btn = _tabs[idx].buttonHTML;
+  var btn = _list[idx].buttonHTML;
   btn.classList.add('active');
   _active = idx;
 
@@ -388,7 +458,7 @@ function setActive(idx) {
 
 // Chrome Tabs Actions
 function openActiveTab() {
-  var activeTab = _tabs[_active];
+  var activeTab = _list[_active];
   chrome.tabs.update(activeTab.id, { 'active': true });
   if (activeTab.windowId !== _currentWindowId) {
     chrome.windows.update(activeTab.windowId, { 'focused': true });
@@ -398,21 +468,21 @@ function openActiveTab() {
 
 // Handle Select Actions
 function getAllSelectedTabs() {
-  return _tabs.filter(onlySelectedTabsFilter);
+  return _list.filter(onlySelectedTabsFilter);
 }
 
 function closeSelectedTabs() {
   chrome.tabs.remove(getAllSelectedTabs().map(toTabIdArray), function () {
-    _tabs = _tabs.filter(filterOutAndRemoveSelected);
+    _list = _list.filter(filterOutAndRemoveSelected);
     refreshInputMatching();
   });
 }
 
 function closeTab(id) {
   chrome.tabs.remove(id, function () {
-    _tabs = _tabs.filter(function (tab) {
+    _list = _list.filter(function (tab) {
       if (tab.id !== id) { return true; }
-      _elem.list.removeChild(tab.buttonHTML);
+      $elem.list.removeChild(tab.buttonHTML);
       return false;
     });
   });
@@ -422,9 +492,9 @@ function setSelectingState(state) {
   if (state !== _isSelecting) {
     // New state, apply change
     if (state) {
-      _input.classList.add('disabled');
+      $input.classList.add('disabled');
     } else {
-      _input.classList.remove('disabled');
+      $input.classList.remove('disabled');
     }
   }
   _isSelecting = state;
@@ -441,13 +511,13 @@ function selectTab(tab) {
 }
 
 function unselectAllTabs() {
-  _tabs.forEach(unselectTab);
+  _list.forEach(unselectTab);
   setSelectingState(false);
 }
 
 function selectMatchedTabs() {
-  if (!_input.value) { return; }
-  _tabs.forEach(function (tab) {
+  if (!$input.value) { return; }
+  _list.forEach(function (tab) {
     if (tab.partial === false) {
       selectTab(tab);
     }
@@ -469,12 +539,12 @@ function moveSelectedTabs() {
     });
     setSelectingState(false);
     refreshInputMatching();
-    _input.select();
+    $input.select();
   });
 }
 
 function toggleSelectActiveTab() {
-  var activeTab = _tabs[_active];
+  var activeTab = _list[_active];
   if (!activeTab) { return; }
   if (activeTab.isUserSelected) {
     unselectTab(activeTab);
@@ -486,8 +556,8 @@ function toggleSelectActiveTab() {
 
 // Update routine
 function update() {
-  if (_prevInputValue !== _input.value) {
-    _prevInputValue = _input.value;
+  if (_prevInputValue !== $input.value) {
+    _prevInputValue = $input.value;
     refreshInputMatching(_prevInputValue);
   }
 }
@@ -534,7 +604,7 @@ _actions = {
   }
 };
 
-_elem.search.onkeydown = function (e) {
+$input.onkeydown = function (e) {
   var fn = _actions[e.keyCode];
   if (typeof fn === 'function') {
     fn(e);
