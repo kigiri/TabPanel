@@ -15,7 +15,7 @@ var $ez = (function (_normalizeMap) {
       }
       return normalized_str;
     },
-    $ez.toTabIdArray: function (tab) {
+    toTabIdArray: function (tab) {
       return tab.id;
     }
   };
@@ -46,8 +46,7 @@ var $state = (function () {
       _currentWindowId = windowId;
     },
     setSelectingState: function (selectState) {
-      if (selectState !== $state.isSelecting()) {
-        // New state, apply change
+      if (selectState !== _isSelecting) {
         if (selectState) {
           $input.classList.add('disabled');
         } else {
@@ -58,6 +57,11 @@ var $state = (function () {
     }
   };
 })();
+
+
+var Elem = function () {
+  
+}
 
 var $tab = (function () {
   var _favIcons;
@@ -86,17 +90,43 @@ var $tab = (function () {
     tab.buttonHTML.appendChild(favIcon);
   }
 
-  function addFavicons() {
+  function addFavicons(newFavIcons) {
+    if (newFavIcons) {
+      _favIcons = newFavIcons;
+    }
     var l = $elem.list;
     for (var i = 0; i < _list.length; i++) {
       generateFavicon(_list[i]);
     }
   }
+  var Tab = function (tab) {
+    // init default values
+    this.isUserSelected = false;
 
-  return {
-    updateFavIcons: function (newFavIcons) {
-      _favIcons = newFavIcons;
-      addFavicons();
+    // copy values of given tab
+    Object.keys(tab).forEach(function (key) {
+      this[key] = tab[key];
+    }.bind(this));
+  }
+
+  Tab.prototype = {
+    select: function () {
+      this.isUserSelected = true;
+      this.buttonHTML.classList.add('selected');
+    },
+    unselect: function () {
+      this.isUserSelected = false;
+      this.buttonHTML.classList.remove('selected');
+    },
+    77: function (e) {  // key M
+      if ($state.isSelecting()) {
+        $list.matched();
+      }
+    },
+    87: function (e) {  // Key W
+      if ($state.isSelecting()) {
+        closeSelectedTabs();
+      }
     }
   };
 })();
@@ -113,6 +143,21 @@ var $search = (function () {
 var $list = (function () {
   var _value = [];
   var _active = -1;
+
+  function setActive(idx) {
+    idx = Math.min(Math.max(0, idx), _value.length - 1);
+
+    var lastTab = _list[_active];
+    if (lastTab !== undefined) {
+      lastTab.buttonHTML.classList.remove('active');
+    }
+
+    var btn = _list[idx].buttonHTML;
+    btn.classList.add('active');
+    _active = idx;
+
+    scrollTo(btn);
+  }
 
   function getIndex(value) {
     var i = -1, len = _value.length;
@@ -157,9 +202,7 @@ var $list = (function () {
     }
   }
 
-  function forEachSelected(key) {
-    forEachTest(key, 'isUserSelected', true);
-  }
+  function forEachSelected(key) 
 
   var _list = {
     selectMatched: function () {
@@ -167,7 +210,7 @@ var $list = (function () {
       forEachTest('select', 'partial', false);
     },
 
-    function toggleActiveSelection() {
+    toggleActiveSelection: function () {
       var activeElem = _value[_active];
       if (!activeElem) { return; }
       if (activeElem.isUserSelected) {
@@ -176,7 +219,11 @@ var $list = (function () {
         activeElem.select();
       }
       setSelectingState(!!(getAllSelectedTabs().length));
-    }
+    },
+
+    forEachSelected: function (key) {
+      forEachTest(key, 'isUserSelected', true);
+    },
 
     indexOf: function (key, value, fallback) {
       var ret = value ? getIndexWithKey(key, value) : getIndex(key);
@@ -223,20 +270,9 @@ var $list = (function () {
       e.preventDefault();
     },
     65: function (e) {  // Key A
-      if ($state.isSelecting()) {
-        $list.selectMatched();
-      }
+      $list.selectMatched();
+      e.preventDefault();
     },
-    77: function (e) {  // key M
-      if ($state.isSelecting()) {
-        $list.matched();
-      }
-    },
-    87: function (e) {  // Key W
-      if ($state.isSelecting()) {
-        closeSelectedTabs();
-      }
-    }
   };
   return _list;
 })();
@@ -522,22 +558,6 @@ function scrollTo(elem) {
   }
 }
 
-// Choose active element
-function setActive(idx) {
-  idx = Math.min(Math.max(0, idx), _list.length - 1);
-
-  var lastTab = _list[_active];
-  if (lastTab !== undefined) {
-    lastTab.buttonHTML.classList.remove('active');
-  }
-
-  var btn = _list[idx].buttonHTML;
-  btn.classList.add('active');
-  _active = idx;
-
-  scrollTo(btn);
-}
-
 // Chrome Tabs Actions
 function openActiveTab() {
   var activeTab = _list[_active];
@@ -612,7 +632,7 @@ var $handler = (function () {
     }
     if ($state.isSelecting()) {
       e.preventDefault();
-      $list.action(e.keyCode);
+      $list.actionOnSelected(e.keyCode);
     }
   };
 
