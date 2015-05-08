@@ -4,16 +4,20 @@ var $input = $elem.search;
 
 var $ez = (function (_normalizeMap) {
 
-  function normalize(str) {
-    var normalized_str = '';
 
-    for (var i = 0; i < str.length; i++) {
-      normalized_str += (_normalizeMap[str[i]] || '-');
-    }
-    return normalized_str;
-  }
+  
   return {
-    normalize: normalize
+    normalize: function (str) {
+      var normalized_str = '';
+
+      for (var i = 0; i < str.length; i++) {
+        normalized_str += (_normalizeMap[str[i]] || '-');
+      }
+      return normalized_str;
+    },
+    $ez.toTabIdArray: function (tab) {
+      return tab.id;
+    }
   };
 });
 
@@ -24,10 +28,22 @@ var $ez = (function (_normalizeMap) {
 // State shared globals
 var $state = (function () {
   var _isSelecting = false;
+  var _currentWindowId = 0;
+  var _opts = {
+    // TODO: load and store opts
+    // Hide private navigation tabs form the results
+    hideIncognito: true
+  };
 
   return {
     isSelecting: function () {
       return _isSelecting;
+    },
+    getWindowId: function () {
+      return _currentWindowId;
+    },
+    setWindowId: function (windowId) {
+      _currentWindowId = windowId;
     },
     setSelectingState: function (selectState) {
       if (selectState !== $state.isSelecting()) {
@@ -51,7 +67,7 @@ var $tab = (function () {
     tab.favicon = true;
     var favIcon = document.createElement('div');
     favIcon.className = 'fav-icon';
-    if (tab.windowId === _currentWindowId) {
+    if (tab.windowId === $state.getWindowId()) {
       tab.buttonHTML.classList.add('current');
     }
     var iconData;
@@ -118,14 +134,37 @@ var $list = (function () {
     return null;
   }
 
-  return {
+  function forEach(key) {
+    var i = -1, len = _value.length, fn;
+    while (++i < len) {
+      fn = _value[i][key];
+      if (typeof fn === 'function') {
+        fn();
+      }
+    }
+  }
+
+  function forEachTest(key, test, value) {
+    var i = -1, len = _value.length, val, fn;
+    while (++i < len) {
+      val = _value[i];
+      if (val[test] === value) {
+        fn = val[key];
+        if (typeof fn === 'function') {
+          fn();
+        }
+      }
+    }
+  }
+
+  function forEachSelected(key) {
+    forEachTest(key, 'isUserSelected', true);
+  }
+
+  var _list = {
     selectMatched: function () {
       if (!$input.value) { return; }
-      _value.forEach(function (elem) {
-        if (elem.partial === false) {
-          elem.select();
-        }
-      })
+      forEachTest('select', 'partial', false);
     },
 
     function toggleActiveSelection() {
@@ -160,16 +199,51 @@ var $list = (function () {
       }
       return ret;
     }
+
+    09: function (e) {  // Key Tab
+      if (_active === -1) { return; }
+      e.preventDefault();
+      $list.toggleActiveSelection();
+    },
+    13: openActiveTab,  // Key Enter
+    27: function (e) {  // Key esc
+      if ($state.isSelecting()) {  
+        _value.forEach(function (tab) {
+          tab.unselect();
+        });
+        setSelectingState(false);
+      }
+    },
+    38: function (e) {  // key Up
+      setActive(_active - 1);
+      e.preventDefault();
+    },
+    40: function (e) {  // key Down
+      setActive(_active + 1);
+      e.preventDefault();
+    },
+    65: function (e) {  // Key A
+      if ($state.isSelecting()) {
+        $list.selectMatched();
+      }
+    },
+    77: function (e) {  // key M
+      if ($state.isSelecting()) {
+        $list.matched();
+      }
+    },
+    87: function (e) {  // Key W
+      if ($state.isSelecting()) {
+        closeSelectedTabs();
+      }
+    }
   };
+  return _list;
 })();
 
 
 // info on currentTab
-var _currentWindowId = null;
-var _opts = {
-  // Hide private navigation tabs form the results
-  hideIncognito: true
-};
+var $state.getWindowId() = null;
 
 // Activate focus on popup opening
 $input.focus();
@@ -189,7 +263,7 @@ function getTab(id) {
 
 function setInfo(bgInfo) {
   $ez = $ez(bgInfo.map);
-  _currentWindowId = bgInfo.currentTab.windowId;
+  $state.getWindowId() = bgInfo.currentTab.windowId;
   _list = bgInfo.tabs;
   _list.forEach(createButtonHTML);
   showTabs(initialTabsSort);
@@ -207,9 +281,6 @@ function onlySelectedTabsFilter(tab) {
   return tab.isUserSelected;
 }
 
-function toTabIdArray(tab) {
-  return tab.id;
-}
 
 function filterOutAndRemoveSelected(tab) {
   if (tab.isUserSelected) {
@@ -232,8 +303,8 @@ function initialTabsSort(a, b) {
     return b.open.time - a.open.time;
   }
   if (a.windowId !== b.windowId) {
-    if (a.windowId === _currentWindowId) { return -1; }
-    if (b.windowId === _currentWindowId) { return  1; }
+    if (a.windowId === $state.getWindowId()) { return -1; }
+    if (b.windowId === $state.getWindowId()) { return  1; }
     return b.windowId - a.windowId;
   }
   return a.id - b.id;
@@ -471,7 +542,7 @@ function setActive(idx) {
 function openActiveTab() {
   var activeTab = _list[_active];
   chrome.tabs.update(activeTab.id, { 'active': true });
-  if (activeTab.windowId !== _currentWindowId) {
+  if (activeTab.windowId !== $state.getWindowId()) {
     chrome.windows.update(activeTab.windowId, { 'focused': true });
   }
   window.close();
@@ -483,7 +554,7 @@ function getAllSelectedTabs() {
 }
 
 function closeSelectedTabs() {
-  chrome.tabs.remove(getAllSelectedTabs().map(toTabIdArray), function () {
+  chrome.tabs.remove(getAllSelectedTabs().map($ez.toTabIdArray), function () {
     _list = _list.filter(filterOutAndRemoveSelected);
     refreshInputMatching();
   });
@@ -510,21 +581,17 @@ function selectTab(tab) {
 }
 
 function unselectAllTabs() {
-  _list.forEach(unselectTab);
-  setSelectingState(false);
 }
 
-function moveSelectedTabs() {
-  // Move tabs to the current window
-  console.log('moving to', _currentWindowId);
+function bringToWindow() {
   var selectedTabs = getAllSelectedTabs();
-  chrome.tabs.move(selectedTabs.map(toTabIdArray), {
+  chrome.tabs.move(selectedTabs.map($ez.toTabIdArray), {
     index: -1,
-    windowId: _currentWindowId
+    windowId: $state.getWindowId()
   }, function () {
     selectedTabs.forEach(function (tab) {
       unselectTab(tab);
-      tab.windowId = _currentWindowId;
+      tab.windowId = $state.getWindowId();
       tab.buttonHTML.classList.add('current');
     });
     setSelectingState(false);
@@ -534,57 +601,18 @@ function moveSelectedTabs() {
 }
 
 
-// Handle inputs
+// Handle inputs require $list, $state
 var $handler = (function () {
-  var _actions = {
-    09: function (e) {  // Key Tab
-      if (_active === -1) { return; }
-      e.preventDefault();
-      $list.toggleActiveSelection();
-    },
-    13: openActiveTab,  // Key Enter
-    27: function (e) {  // Key esc
-      if ($state.isSelecting()) {
-        e.preventDefault();
-        unselectAllTabs();
-      }
-    },
-    38: function (e) {  // key Up
-      setActive(_active - 1);
-      e.preventDefault();
-    },
-    40: function (e) {  // key Down
-      setActive(_active + 1);
-      e.preventDefault();
-    },
-    65: function (e) {  // Key A
-      if ($state.isSelecting()) {
-        e.preventDefault();
-        $list.selectMatched();
-      }
-    },
-    77: function (e) {  // key M
-      if ($state.isSelecting()) {
-        e.preventDefault();
-        moveSelectedTabs();
-      }
-    },
-    87: function (e) {  // Key W
-      if ($state.isSelecting()) {
-        e.preventDefault();
-        closeSelectedTabs();
-      }
-    }
-  };
 
   // Subscribe to DOM events
   $input.onkeydown = function (e) {
-    var fn = _actions[e.keyCode];
+    var fn = $list[e.keyCode];
     if (typeof fn === 'function') {
       fn(e);
     }
     if ($state.isSelecting()) {
       e.preventDefault();
+      $list.action(e.keyCode);
     }
   };
 
