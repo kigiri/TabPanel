@@ -1,48 +1,103 @@
-﻿var $ez = (function () {
+﻿// Shorthands
+var $elem = document.all;
+var $input = $elem.search;
 
-  return {
+var $ez = (function (_normalizeMap) {
 
-  };
-})();
+  function normalize(str) {
+    var normalized_str = '';
 
-$ez.prototype.normalize = function(str) {
-  var normalized_str = '';
-  var c;
-
-  for (var i = 0; i < str.length; i++) {
-    c = str[i];
-    if (/[0-9A-Za-z]/i.test(c)) {
-      normalized_str += c;
-    } else {
+    for (var i = 0; i < str.length; i++) {
       normalized_str += (_normalizeMap[str[i]] || '-');
     }
+    return normalized_str;
   }
-  return (normalized_str);
-};
+  return {
+    normalize: normalize
+  };
+});
+
 
 
 // Cached Globals and Aliases
-var _list = [];
-var _asyncLoadState = 0;
-var _active = -1;
-var _prevTabId = -1;
-var _actions = [];
-var _prevInputValue = '';
-var _isSelecting = false;
-var _normalizeMap = [];
-var _favIcons;
 
 // State shared globals
 var $state = (function () {
+  var _isSelecting = false;
+
+  return {
+    isSelecting: function () {
+      return _isSelecting;
+    },
+    setSelectingState: function (selectState) {
+      if (selectState !== $state.isSelecting()) {
+        // New state, apply change
+        if (selectState) {
+          $input.classList.add('disabled');
+        } else {
+          $input.classList.remove('disabled');
+        }
+        _isSelecting = selectState;
+      }
+    }
+  };
+})();
+
+var $tab = (function () {
+  var _favIcons;
+
+  function generateFavicon(tab) {
+    if (tab.favicon) { return; }
+    tab.favicon = true;
+    var favIcon = document.createElement('div');
+    favIcon.className = 'fav-icon';
+    if (tab.windowId === _currentWindowId) {
+      tab.buttonHTML.classList.add('current');
+    }
+    var iconData;
+    if (typeof tab.favIconUrl === 'number') {
+      iconData = tab.url;
+    } else {
+      iconData = _favIcons[tab.favIconUrl].data;
+    }
+    if (typeof iconData === 'string') {
+      var img = document.createElement('img');
+      img.src = iconData;
+      favIcon.appendChild(img);
+    } else {
+      favIcon.className += ' not-found';
+    }
+    tab.buttonHTML.appendChild(favIcon);
+  }
+
+  function addFavicons() {
+    var l = $elem.list;
+    for (var i = 0; i < _list.length; i++) {
+      generateFavicon(_list[i]);
+    }
+  }
+
+  return {
+    updateFavIcons: function (newFavIcons) {
+      _favIcons = newFavIcons;
+      addFavicons();
+    }
+  };
+})();
+
+var $search = (function () {
+  var _prevInputValue = '';
 
   return {
 
   };
 })();
 
-
+// require $state, $input
 var $list = (function () {
   var _value = [];
+  var _active = -1;
+
   function getIndex(value) {
     var i = -1, len = _value.length;
     while (++i < len) {
@@ -64,6 +119,26 @@ var $list = (function () {
   }
 
   return {
+    selectMatched: function () {
+      if (!$input.value) { return; }
+      _value.forEach(function (elem) {
+        if (elem.partial === false) {
+          elem.select();
+        }
+      })
+    },
+
+    function toggleActiveSelection() {
+      var activeElem = _value[_active];
+      if (!activeElem) { return; }
+      if (activeElem.isUserSelected) {
+        activeElem.unselect();
+      } else {
+        activeElem.select();
+      }
+      setSelectingState(!!(getAllSelectedTabs().length));
+    }
+
     indexOf: function (key, value, fallback) {
       var ret = value ? getIndexWithKey(key, value) : getIndex(key);
       if (value) {
@@ -87,13 +162,6 @@ var $list = (function () {
     }
   };
 })();
-
-
-// FavIcons
-
-// Shorthands
-var $elem = document.all;
-var $input = $elem.search;
 
 
 // info on currentTab
@@ -120,7 +188,7 @@ function getTab(id) {
 }
 
 function setInfo(bgInfo) {
-  _normalizeMap = bgInfo.map;
+  $ez = $ez(bgInfo.map);
   _currentWindowId = bgInfo.currentTab.windowId;
   _list = bgInfo.tabs;
   _list.forEach(createButtonHTML);
@@ -216,30 +284,6 @@ function createButtonHTML(tab) {
   tab.buttonHTML = button;
 }
 
-function generateFavicon(tab) {
-  if (tab.favicon) { return; }
-  tab.favicon = true;
-  var favIcon = document.createElement('div');
-  favIcon.className = 'fav-icon';
-  if (tab.windowId === _currentWindowId) {
-    tab.buttonHTML.classList.add('current');
-  }
-  var iconData;
-  if (typeof tab.favIconUrl === 'number') {
-    iconData = tab.url;
-  } else {
-    iconData = _favIcons[tab.favIconUrl].data;
-  }
-  if (typeof iconData === 'string') {
-    var img = document.createElement('img');
-    img.src = iconData;
-    favIcon.appendChild(img);
-  } else {
-    favIcon.className += ' not-found';
-  }
-  tab.buttonHTML.appendChild(favIcon);
-}
-
 // here I separate domain from url param to fine controle the score later
 
 function appendAllTabs() {
@@ -250,49 +294,16 @@ function appendAllTabs() {
     var c = button.children;
     setDomAttrs(button, c[0], c[1], tab);
     l.appendChild(button);
-    // if (!tab.favicon) {
-    //   setTimeout(generateFavicon, 20 * i, tab);
-    // }
   }
   setActive(0);
-  chrome.runtime.sendMessage({ type: 'loadFavIcons' }, function (favIcons) {
-    _favIcons = favIcons;
-    addFavicons();
-  });
+  chrome.runtime.sendMessage({ type: 'loadFavIcons' }, $tab.updateFavIcons);
 }
-
-function addFavicons() {
-  var l = $elem.list;
-  for (var i = 0; i < _list.length; i++) {
-    generateFavicon(_list[i]);
-  }
-}
-
 
 function cleanTabList() {
   var l = $elem.list;
   while (l.hasChildNodes()) {
     l.removeChild(l.lastChild);
   }
-}
-
-// Start it all !
-function init() {
-  var queryOptions = {
-    'currentWindow': true,
-    'active': true
-  };
-
-  // get previous tab from tabHistory
-  chrome.runtime.onMessage.addListener(function (req, sender) {
-    if (req.type === "data") {
-      setInfo(req.data);
-    }
-  });
-  chrome.runtime.sendMessage({type: 'loadPopup'});
-
-  // Start the update
-  setInterval(update, 35);
 }
 
 // Fuzzy Search
@@ -488,18 +499,6 @@ function closeTab(id) {
   });
 }
 
-function setSelectingState(state) {
-  if (state !== _isSelecting) {
-    // New state, apply change
-    if (state) {
-      $input.classList.add('disabled');
-    } else {
-      $input.classList.remove('disabled');
-    }
-  }
-  _isSelecting = state;
-}
-
 function unselectTab(tab) {
   tab.isUserSelected = false;
   tab.buttonHTML.classList.remove('selected');
@@ -513,15 +512,6 @@ function selectTab(tab) {
 function unselectAllTabs() {
   _list.forEach(unselectTab);
   setSelectingState(false);
-}
-
-function selectMatchedTabs() {
-  if (!$input.value) { return; }
-  _list.forEach(function (tab) {
-    if (tab.partial === false) {
-      selectTab(tab);
-    }
-  })
 }
 
 function moveSelectedTabs() {
@@ -543,16 +533,88 @@ function moveSelectedTabs() {
   });
 }
 
-function toggleSelectActiveTab() {
-  var activeTab = _list[_active];
-  if (!activeTab) { return; }
-  if (activeTab.isUserSelected) {
-    unselectTab(activeTab);
-  } else {
-    selectTab(activeTab);
+
+// Handle inputs
+var $handler = (function () {
+  var _actions = {
+    09: function (e) {  // Key Tab
+      if (_active === -1) { return; }
+      e.preventDefault();
+      $list.toggleActiveSelection();
+    },
+    13: openActiveTab,  // Key Enter
+    27: function (e) {  // Key esc
+      if ($state.isSelecting()) {
+        e.preventDefault();
+        unselectAllTabs();
+      }
+    },
+    38: function (e) {  // key Up
+      setActive(_active - 1);
+      e.preventDefault();
+    },
+    40: function (e) {  // key Down
+      setActive(_active + 1);
+      e.preventDefault();
+    },
+    65: function (e) {  // Key A
+      if ($state.isSelecting()) {
+        e.preventDefault();
+        $list.selectMatched();
+      }
+    },
+    77: function (e) {  // key M
+      if ($state.isSelecting()) {
+        e.preventDefault();
+        moveSelectedTabs();
+      }
+    },
+    87: function (e) {  // Key W
+      if ($state.isSelecting()) {
+        e.preventDefault();
+        closeSelectedTabs();
+      }
+    }
+  };
+
+  // Subscribe to DOM events
+  $input.onkeydown = function (e) {
+    var fn = _actions[e.keyCode];
+    if (typeof fn === 'function') {
+      fn(e);
+    }
+    if ($state.isSelecting()) {
+      e.preventDefault();
+    }
+  };
+
+  function checkClickedElement(elem) {
+    if (elem.tagName !== "BUTTON") {
+      elem = elem.offsetParent;
+      if (elem.tagName !== "BUTTON") { return false; }
+    }
+    return elem;
   }
-  setSelectingState(!!(getAllSelectedTabs().length));
-}
+
+  document.body.onmousedown = function (e) {
+    if (checkClickedElement(e.target) && e.which === 2) {
+      return false;
+    }
+  };
+
+  document.body.onmouseup = function (e) {
+    var elem = checkClickedElement(e.target);
+    if (!elem) { return; }
+    if (e.which === 2) {
+      closeTab(parseInt(elem.dataset.id));
+      e.preventDefault();
+    } else if (e.which === 1) {
+      setActive(getTabIndex(elem.dataset.id));
+      openActiveTab(); 
+    }
+  };
+});
+
 
 // Update routine
 function update() {
@@ -562,82 +624,21 @@ function update() {
   }
 }
 
-// Handle inputs
-_actions = {
-  09: function (e) {  // Key Tab
-    if (_active === -1) { return; }
-    e.preventDefault();
-    toggleSelectActiveTab();
-  },
-  13: openActiveTab,  // Key Enter
-  27: function (e) {  // Key esc
-    if (_isSelecting) {
-      e.preventDefault();
-      unselectAllTabs();
+// Start it all !
+function init() {
+  chrome.runtime.onMessage.addListener(function (req, sender) {
+    if (req.type === "data") {
+      setInfo(req.data);
     }
-  },
-  38: function (e) {  // key Up
-    setActive(_active - 1);
-    e.preventDefault();
-  },
-  40: function (e) {  // key Down
-    setActive(_active + 1);
-    e.preventDefault();
-  },
-  65: function (e) {  // Key A
-    if (_isSelecting) {
-      e.preventDefault();
-      selectMatchedTabs();
-    }
-  },
-  77: function (e) {  // key M
-    if (_isSelecting) {
-      e.preventDefault();
-      moveSelectedTabs();
-    }
-  },
-  87: function (e) {  // Key W
-    if (_isSelecting) {
-      e.preventDefault();
-      closeSelectedTabs();
-    }
-  }
-};
+  });
+  chrome.runtime.sendMessage({type: 'loadPopup'});
 
-$input.onkeydown = function (e) {
-  var fn = _actions[e.keyCode];
-  if (typeof fn === 'function') {
-    fn(e);
-  }
-  if (_isSelecting) {
-    e.preventDefault();
-  }
-};
+  // Start the update
+  setInterval(update, 35);
 
-function checkClickedElement(elem) {
-  if (elem.tagName !== "BUTTON") {
-    elem = elem.offsetParent;
-    if (elem.tagName !== "BUTTON") { return false; }
-  }
-  return elem;
+  // Init handlers
+  $handler();
 }
 
-document.body.onmousedown = function (e) {
-  if (checkClickedElement(e.target) && e.which === 2) {
-    return false;
-  }
-};
-
-document.body.onmouseup = function (e) {
-  var elem = checkClickedElement(e.target);
-  if (!elem) { return; }
-  if (e.which === 2) {
-    closeTab(parseInt(elem.dataset.id));
-    e.preventDefault();
-  } else if (e.which === 1) {
-    setActive(getTabIndex(elem.dataset.id));
-    openActiveTab(); 
-  }
-};
 
 init();
