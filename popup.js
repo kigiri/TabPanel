@@ -58,17 +58,34 @@ var $state = (function () {
   };
 })();
 
+var Elem = (function () {
+  var elemId = 0;
+  return function () {
+    this.elemId = elemId++;
+  };
+})();
 
-var Elem = function () {
-  
+Elem.prototype = {
+  activate: (function () {
+    var _previousActive = null;
+    return function () {
+      if (this.elemId === _previousActive.elemId) { return; }
+
+      this.buttonHTML.classList.add('active');
+      if (_previousActive) {
+        _previousActive.buttonHTML.classList.remove('active');
+      }
+      _previousActive = this;
+    }
+  })(),
 }
 
 var $tab = (function () {
   var _favIcons;
 
-  function generateFavicon(tab) {
-    if (tab.favicon) { return; }
-    tab.favicon = true;
+  function generateFavIcon(tab) {
+    if (tab.favIcon) { return; }
+    tab.favIcon = true;
     var favIcon = document.createElement('div');
     favIcon.className = 'fav-icon';
     if (tab.windowId === $state.getWindowId()) {
@@ -90,13 +107,13 @@ var $tab = (function () {
     tab.buttonHTML.appendChild(favIcon);
   }
 
-  function addFavicons(newFavIcons) {
+  function addFavIcons(newFavIcons) {
     if (newFavIcons) {
       _favIcons = newFavIcons;
     }
     var l = $elem.list;
     for (var i = 0; i < _list.length; i++) {
-      generateFavicon(_list[i]);
+      generateFavIcon(_list[i]);
     }
   }
   var Tab = function (tab) {
@@ -144,18 +161,24 @@ var $list = (function () {
   var _value = [];
   var _active = -1;
 
-  function setActive(idx) {
-    idx = Math.min(Math.max(0, idx), _value.length - 1);
+  // Scroll to element if necessary
+  function scrollTo(elem) {
+    var l = $elem.list;
+    var min = l.scrollTop
+    var max = l.clientHeight + min;
+    var offset = elem.offsetTop;
+    var height = elem.offsetHeight;
 
-    var lastTab = _list[_active];
-    if (lastTab !== undefined) {
-      lastTab.buttonHTML.classList.remove('active');
+    if ((offset + height - 4) > max) {
+      l.scrollTop += (offset + height - 4) - max;
+    } else if (min && (offset - (height * 2) < min)) {
+      l.scrollTop += offset - (height * 2) - min;
     }
+  }
 
-    var btn = _list[idx].buttonHTML;
-    btn.classList.add('active');
-    _active = idx;
-
+  function setActive(idx) {
+    _active = Math.min(Math.max(0, idx), _value.length - 1);
+    _value[_active].activate();
     scrollTo(btn);
   }
 
@@ -375,9 +398,9 @@ function setDomAttrs(button, title, url, tab) {
   url.innerHTML = makeUrl(tab);
 }
 
-function handleFaviconLoadfailure(event) {
+function handleFavIconLoadfailure(event) {
   var t = event.target;
-  // Unset the favicon url for this elem to avoid trying to refetch the favicon
+  // Unset the favIcon url for this elem to avoid trying to refetch the favIcon
   _list[getTabIndex(t.offsetParent.parentNode.dataset.id)].favIconUrl = '';
   t.offsetParent.className += ' not-found';
   t.remove();
@@ -540,21 +563,6 @@ function refreshInputMatching() {
   } else {
     showTabs(scoreTabsSort);
     $input.classList.remove('invalid');
-  }
-}
-
-// Scroll to element if necessary
-function scrollTo(elem) {
-  var l = $elem.list;
-  var min = l.scrollTop
-  var max = l.clientHeight + min;
-  var offset = elem.offsetTop;
-  var height = elem.offsetHeight;
-
-  if ((offset + height - 4) > max) {
-    l.scrollTop += (offset + height - 4) - max;
-  } else if (min && (offset - (height * 2) < min)) {
-    l.scrollTop += offset - (height * 2) - min;
   }
 }
 

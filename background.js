@@ -510,18 +510,16 @@ chrome.tabs.query({}, function (tabArray) {
  * Released under the BSD license
  * http://www.opensource.org/licenses/bsd-license.php
  *
- * Modified by cdenis for favicons, copyright I don't give a fuck.
+ * Modified by cdenis for favIcons, copyright I don't give a fuck.
  ******************************************************************************/
 
 var Identicon = (function() {
-  Identicon = function(url, size, margin){
+  Identicon = function(url) {
     this.url = url;
-    this.size = (size || 64);
   }
 
   Identicon.prototype = {
     url: null,
-    margin: null,
 
     render: function () {
       var hash = this.hash(this.url);
