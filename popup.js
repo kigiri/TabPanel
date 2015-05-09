@@ -63,6 +63,7 @@ var Elem = (function (){
           len = children.length,
           button = document.createElement('button');
 
+      button.id = 'elem-'+ elemId;
       button.dataset = {
         type: type,
         id: elemId
@@ -72,7 +73,8 @@ var Elem = (function (){
         button.appendChild(children[i]);
       }
 
-      this.buttonHTML = button
+      this.buttonHTML = button;
+      this.css = button.classList;
       this.elemId = elemId++;
     };
   })();
@@ -82,24 +84,40 @@ var Elem = (function (){
     return function () {
       if (this.elemId === _previousActive.elemId) { return; }
 
-      this.buttonHTML.classList.add('active');
+      this.css.add('active');
       if (_previousActive) {
-        _previousActive.buttonHTML.classList.remove('active');
+        _previousActive.css.remove('active');
       }
       _previousActive = this;
       return this;
     }
   })();
 
+  Elem.prototype.update = function () {
+    if ($search.isEmpty()) {
+      this.setCssFull();
+    }
+  };
+
+  Elem.prototype.setCssPartial = function () {
+    this.css.remove('match-full');
+    this.css.add('match-partial');
+  };
+
+  Elem.prototype.setCssFull = function () {
+    this.css.remove('match-partial');
+    this.css.add('match-full');
+  };
+
   Elem.prototype.select = function () {
     this.selected = true;
-    this.buttonHTML.classList.add('selected');
+    this.css.add('selected');
     return this;
   };
 
   Elem.prototype.unselect = function () {
     this.selected = false;
-    this.buttonHTML.classList.remove('selected');
+    this.css.remove('selected');
     return this;
   };
 
@@ -128,8 +146,8 @@ var Tab = (function () {
 
     this.h3 = document.createElement('h3');
     this.span = document.createElement('span');
-    this.update();
     Elem.call(this, 'tab', [this.h3, this.span]);
+    this.update();
   }
 
   Tab.prototype = Object.create(Elem.prototype);
@@ -142,6 +160,7 @@ var Tab = (function () {
       this.h3.innerHTML = tab.title.str;
       this.span.innerHTML = '<i>'+ tab.hostname.str +'</i>'+ tab.pathname.str;
     }
+
   };
 
   Tab.prototype.setFavIcon = function (newFavIcons) {
@@ -174,7 +193,7 @@ var Tab = (function () {
 
   Tab.prototype.updateCurrent = function () {
     if (this.windowId === $state.getWindowId()) {
-      this.buttonHTML.classList.add('current');
+      this.css.add('current');
     }
     return this;
   };
@@ -294,6 +313,32 @@ var $list = (function () {
       activeElem.select();
     }
     setSelectingState(!!(getAllSelectedTabs().length));
+  };
+
+  List.prototype.refresh = function (key) {
+    if ($search.isEmpty()) {
+      $input.classList.remove('invalid');
+      return showTabs(initialTabsSort);
+    }
+
+    var i = -1, len = _value.length,
+        pattern = $ez.normalize(_prevInputValue.toLowerCase()).replace(/-/g, ''),
+        noMatch = true;
+
+    while (++i < len) {
+      var elem = _value[i];
+      elem.match();
+      if (!elem.partial) {
+        noMatch = false;
+      }
+    }
+    if (noMatch) {
+      // set class no match on input
+      $input.classList.add('invalid');
+    } else {
+      showTabs(scoreTabsSort);
+      $input.classList.remove('invalid');
+    }
   };
 
   List.prototype.forEachSelected = function (key) {
@@ -468,137 +513,6 @@ function cleanTabList() {
     l.removeChild(l.lastChild);
   }
 }
-
-// Fuzzy Search
-// ToDo :
-// tolerate repeating letters (ex: tollerate)
-// tolerate inverted letters (ex: toelrate)
-// tolerate typos (ex: tolerarte)
-
-// TODO: try with objects instead of array for matchedIdx collection
-
-function makeObject(score, matched, partial) {
-  return {
-    'score': score,
-    'matched': matched,
-    'partial': partial
-  };
-}
-
-function fuzzyMatch(str, pattern, s, p, score, bonus, matched, deepness) {
-  // End of the pattern, successfull match
-  if (p >= pattern.length) {
-    return makeObject(score, matched, false);
-  }
-
-  // End of the string, failed to match all the pattern, apply penalty to score
-  if (s >= str.length) {
-    return makeObject(score, matched, true);
-  }
-
-  var c = str[s];
-  var lowerC = c.toLowerCase();
-  if (lowerC === pattern[p]) {
-    // Look a head to find best possible match
-    var altMatch;
-    if (deepness > 0) {
-      altMatch = fuzzyMatch(str, pattern, s+1, p, score, 0, matched.slice(), deepness - 1);
-    }
-
-    // Store current match and calculate bonus
-    matched.push(s);
-
-    // Bonus for capitals
-    if (c !== lowerC) {
-      score += 2;
-    }
-    score += 1 + bonus;
-    bonus += 5;
-    var match = fuzzyMatch(str, pattern, s+1, p+1, score, bonus, matched, deepness);
-    // Return the best score
-    return (!altMatch || altMatch.score <= match.score) ? match : altMatch;
-  } else {
-    // TODO: If we don't have any bonus, this could be an inverted type
-    // try to match previous char with current and current with previous
-
-    // If nothing matched, recalculate bonus
-    bonus = c === '-' ? 3 : 0;
-    return fuzzyMatch(str, pattern, s+1, p, score, bonus, matched, deepness);
-  }
-}
-
-function applyArrayToHTML(arr, baseStr) {
-  if (!Array.isArray(arr) || !arr.length) { return baseStr; }
-  var strHTML = '';
-  var prevIdx = null;
-  var openTag = false;
-  for (var i = 0; i < baseStr.length; i++) {
-    var idx = arr[arr.indexOf(i)];
-    if (typeof idx === 'number') {
-      if (idx - 1 !== prevIdx) {
-        strHTML += '<b>';
-        openTag = true;
-      }
-      prevIdx = idx;
-    } else if ((prevIdx !== null) && openTag) {
-      strHTML += '</b>';
-      openTag = false;
-    }
-    strHTML += baseStr[i];
-  }
-  if (openTag) {
-    strHTML += '</b>';
-  }
-  return strHTML;
-}
-
-function fuzzyMatchString(tab, key, pattern) {
-  var str = tab[key + 'Normalized'];
-  if (!str) { return 0; }
-  var bestMatch = fuzzyMatch(str, pattern, 0, 0, 0, 8, [], 6);
-  tab.score += bestMatch.score;
-  tab[key + 'HTML'] = applyArrayToHTML(bestMatch.matched, tab[key]);
-  return bestMatch.partial ? 0 : 1;
-}
-
-function setMatchCss(button, type) {
-  button.classList.remove('match-'+ (type === 'full' ? 'partial' : 'full'));
-  button.classList.add('match-'+ type);
-}
-
-function refreshInputMatching() {
-  if (typeof _prevInputValue !== 'string' || !_prevInputValue.length) {
-    $input.classList.remove('invalid');
-    return showTabs(initialTabsSort);
-  }
-  var pattern = $ez.normalize(_prevInputValue.toLowerCase()).replace(/-/g, '');
-  var noMatch = true;
-  for (var i = _list.length - 1; i >= 0; i--) {
-    var tab = _list[i];
-    var ret = 0;
-    tab.score = 0;
-    ret += fuzzyMatchString(tab, 'hostname', pattern);
-    tab.score *= 2; // match in host should bd worth more
-    ret += fuzzyMatchString(tab, 'title', pattern);
-    ret += fuzzyMatchString(tab, 'pathname', pattern);
-    if (ret) {
-      noMatch = false;
-      setMatchCss(tab.buttonHTML, 'full');
-      tab.partial = false;
-    } else {
-      tab.partial = true;
-      setMatchCss(tab.buttonHTML, 'partial');
-    }
-  }
-  if (noMatch) {
-    // set class no match on input
-    $input.classList.add('invalid');
-  } else {
-    showTabs(scoreTabsSort);
-    $input.classList.remove('invalid');
-  }
-}
-
 // Chrome Tabs Actions
 function openActiveTab() {
   var activeTab = _list[_active];
@@ -631,19 +545,6 @@ function closeTab(id) {
   });
 }
 
-function unselectTab(tab) {
-  tab.selected = false;
-  tab.buttonHTML.classList.remove('selected');
-}
-
-function selectTab(tab) {
-  tab.selected = true;
-  tab.buttonHTML.classList.add('selected');
-}
-
-function unselectAllTabs() {
-}
-
 function bringToWindow() {
   var selectedTabs = getAllSelectedTabs();
   chrome.tabs.move(selectedTabs.map($ez.toTabIdArray), {
@@ -653,7 +554,7 @@ function bringToWindow() {
     selectedTabs.forEach(function (tab) {
       unselectTab(tab);
       tab.windowId = $state.getWindowId();
-      tab.buttonHTML.classList.add('current');
+      tab.css.add('current');
     });
     setSelectingState(false);
     refreshInputMatching();
