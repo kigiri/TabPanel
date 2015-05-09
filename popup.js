@@ -421,7 +421,7 @@ Elem = (function (){
   Elem.prototype.activate = (function () {
     var _previousActive = { elemId: null };
     return function () {
-      if (this.elemId === _previousActive.elemId) { return; }
+      if (this.elemId === _previousActive.elemId) { return this; }
       this.css.add('active');
       if (_previousActive.elemId !== null) {
         _previousActive.css.remove('active');
@@ -431,7 +431,8 @@ Elem = (function (){
     }
   })();
 
-  Elem.prototype.match = function () { }; // 
+  // Should be implemented by specific Elems
+  Elem.prototype.match = function () { };
 
   Elem.prototype.compare = function (elem) {
     return this.elemId - elem.elemId;
@@ -448,18 +449,21 @@ Elem = (function (){
     if ($search.isEmpty()) {
       this.setCssFull();
     }
+    return this;
   };
 
   Elem.prototype.setPartialMatch = function () {
     this.css.remove('match-full');
     this.css.add('match-partial');
     this.partial = true;
+    return this;
   };
 
   Elem.prototype.setFullMatch = function () {
     this.css.remove('match-partial');
     this.css.add('match-full');
     this.partial = false;
+    return this;
   };
 
   Elem.prototype.select = function () {
@@ -664,7 +668,7 @@ List = (function () {
 
   function setActive(idx) {
     _active = Math.min(Math.max(0, idx), _elemArray.length - 1);
-    scrollTo(_elemArray[_active].activate());
+    scrollTo(_elemArray[_active].activate().buttonHTML);
   }
 
   function getIndex(value) {
