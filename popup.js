@@ -1,5 +1,7 @@
-﻿// Shorthands
-var $ez = (function () {
+﻿var $ez, $list, $state, $search, $handlers,
+    Elem, Tab, List;
+
+$ez = (function () {
   function normalize(_normalizeMap) {
     normalize = function (str) {
       var normalized_str = '';
@@ -33,7 +35,7 @@ var $ez = (function () {
 
 
 // State shared globals
-var $state = (function () {
+$state = (function () {
   var _isSelecting = false,
       _currentWindowId = 0,
       _opts = {
@@ -71,7 +73,25 @@ var $state = (function () {
   };
 })();
 
-var Elem = (function (){
+$search = (function () {
+  var _prevInputValue = '',
+      _input = document.getElementById("search");
+
+  return {
+    isEmpty: function () {
+      return !_prevInputValue;
+    },
+    input: _input,
+    update: function () {
+      if (_prevInputValue !== $search.input.value) {
+        _prevInputValue = $search.input.value;
+        refreshInputMatching(_prevInputValue);
+      }
+    }
+  };
+})();
+
+Elem = (function (){
   var Elem = (function () {
     var elemId = 0;
     return function (type, children) {
@@ -156,7 +176,7 @@ var Elem = (function (){
   return Elem;
 })();
 
-var Tab = (function () {
+Tab = (function () {
   var _favIcons = {},
       _wantedKeys = [
       'windowId',
@@ -317,26 +337,7 @@ var Tab = (function () {
   return Tab;
 })();
 
-var $search = (function () {
-  var _prevInputValue = '',
-      _input = document.getElementById("search");
-
-  return {
-    isEmpty: function () {
-      return !_prevInputValue;
-    },
-    input: _input,
-    update: function () {
-      if (_prevInputValue !== $search.input.value) {
-        _prevInputValue = $search.input.value;
-        refreshInputMatching(_prevInputValue);
-      }
-    }
-  };
-})();
-
-// require $state, $search.input
-var $list = (function () {
+List = (function () {
   var _value = [],
       _list = document.getElementById("list"),
       _active = -1;
@@ -538,8 +539,7 @@ var $list = (function () {
   return List;
 })();
 
-// Handle inputs require $list, $state
-var $handler = (function () {
+var $handlers = (function () {
 
   // Subscribe to DOM events
   $search.input.onkeydown = function (event) {
@@ -582,9 +582,8 @@ var $handler = (function () {
 function setInfo(bgInfo) {
   $ez.normalize(bgInfo.map);
   $state.setWindowId(bgInfo.currentTab.windowId);
-  _list = bgInfo.tabs;
-  _list.forEach(createButtonHTML);
-  showTabs(initialTabsSort);
+  $list = new List(bgInfo.tabs);
+  $list.refresh();
 }
 
 // Start it all !
@@ -604,6 +603,5 @@ function init() {
 
   $search.input.focus();
 }
-
 
 init();
