@@ -281,13 +281,6 @@ Match = (function (opts) {
 
   return {
     normalize: normalize,
-    byScore: function (a, b) {
-      if (a.score != b.score) {
-        return (a.score > b.score) ? -1 : 1;
-      }
-      return (a.str < b.str) ? -1 : 1;
-    },
-
     exact: function (block, pattern) {
       return matchWholeWord(block, pattern, exact);
     },
@@ -325,7 +318,13 @@ $state = (function () {
         hideIncognito: true,
         key: {
           move: 77,
-          close: 87
+          close: 87,
+          select: 9,    // Default : Tab
+          enter: 13,    // Default : Enter
+          cancel: 27,   // Default : esc
+          up: 38,       // Default : Up
+          down: 40,     // Default : Down
+          all: 65,      // Default : A
         },
         match: {
           caseInsensitive: false,
@@ -348,11 +347,7 @@ $state = (function () {
     },
     setSelectingState: function (selectState) {
       if (selectState !== _isSelecting) {
-        if (selectState) {
-          $search.input.classList.add('disabled');
-        } else {
-          $search.input.classList.remove('disabled');
-        }
+        $search[selectState ? 'disable' : 'enable']();
         _isSelecting = selectState;
       }
     }
@@ -367,12 +362,33 @@ $search = (function () {
     isEmpty: function () {
       return !_prevInputValue;
     },
-    input: _input,
+    getPattern: function () {
+      return _input.value;
+    },
     update: function () {
-      if (_prevInputValue !== $search.input.value) {
-        _prevInputValue = $search.input.value;
-        refreshInputMatching(_prevInputValue);
+      var pattern = _input.value
+      if (_prevInputValue !== pattern) {
+        _prevInputValue = pattern;
+        $list.update(pattern);
       }
+    },
+    valid: function () {
+      _input.classList.remove('invalid');
+    },
+    invalid: function () {
+      _input.classList.add('invalid');
+    },
+    enable: function () {
+      _input.classList.remove('disable');
+    },
+    disable: function () {
+      _input.classList.add('disable');
+    },
+    focus: function () {
+      _input.focus();
+    },
+    onkeydown: function (eventHandler) {
+      _input.onkeydown = eventHandler;
     }
   };
 })();
@@ -570,17 +586,17 @@ Tab = (function () {
   };
 
   Tab.prototype.compare = function (tab) {
-    if (this.openInfo.time || b.openInfo.time) {
+    if (this.openInfo.time || tab.openInfo.time) {
       if (this.openInfo.fresh) {
-        if (b.openInfo.fresh) { return this.openInfo.time - b.openInfo.time; }
+        if (tab.openInfo.fresh) { return this.openInfo.time - tab.openInfo.time; }
         return -1;
-      } else if (b.openInfo.fresh) { return 1; }
-      return b.openInfo.time - this.openInfo.time;
+      } else if (tab.openInfo.fresh) { return 1; }
+      return tab.openInfo.time - this.openInfo.time;
     }
-    if (this.windowId !== b.windowId) {
+    if (this.windowId !== tab.windowId) {
       if (this.windowId === $state.getWindowId()) { return -1; }
-      if (b.windowId === $state.getWindowId()) { return 1; }
-      return b.windowId - this.windowId;
+      if (tab.windowId === $state.getWindowId()) { return 1; }
+      return tab.windowId - this.windowId;
     }
     return Elem.prototype.compare.call(this, tab);
   };
@@ -600,21 +616,17 @@ Tab = (function () {
       index: -1,
       windowId: windowId
     }, function () {
-      selectedTabs.forEach(function (tab) {
-        unselectTab(tab);
-        tab.windowId = $state.getWindowId();
-        tab.css.add('current');
-      });
-      setSelectingState(false);
-      refreshInputMatching();
-      $search.input.select();
+      this.unselect();
+      this.windowId = $state.getWindowId();
+      this.css.add('current');
+      $state.setSelectingState(false);
     });
     return this;
   };
 
   /*
    * call back exemple:
-   * remove from _value
+   * remove from _elemArray
    * _list.removeChild(tab.buttonHTML);
    */
   Tab.prototype.close = function (callback) {
@@ -635,7 +647,7 @@ Tab = (function () {
 })();
 
 List = (function () {
-  var _value = [],
+  var _elemArray = [],
       _list = document.getElementById('list'),
       _active = -1;
 
@@ -654,34 +666,24 @@ List = (function () {
   }
 
   function setActive(idx) {
-    _active = Math.min(Math.max(0, idx), _value.length - 1);
-    scrollTo(_value[_active].activate());
+    _active = Math.min(Math.max(0, idx), _elemArray.length - 1);
+    scrollTo(_elemArray[_active].activate());
   }
 
   function getIndex(value) {
-    var i = -1, len = _value.length;
+    var i = -1, len = _elemArray.length;
     while (++i < len) {
-      if (_value[i] === value) {
-        return _value[i];
-      }
-    }
-    return null;
-  }
-
-  function getIndexWithKey(key, value) {
-    var i = -1, len = _value.length;
-    while (++i < len) {
-      if (_value[i][key] === value) {
-        return _value[i][key];
+      if (_elemArray[i] === value) {
+        return _elemArray[i];
       }
     }
     return null;
   }
 
   function forEach(key) {
-    var i = -1, len = _value.length, fn;
+    var i = -1, len = _elemArray.length, fn;
     while (++i < len) {
-      fn = _value[i][key];
+      fn = _elemArray[i][key];
       if (typeof fn === 'function') {
         fn();
       }
@@ -689,9 +691,9 @@ List = (function () {
   }
 
   function forEachTest(key, test, value) {
-    var i = -1, len = _value.length, val, fn;
+    var i = -1, len = _elemArray.length, val, fn;
     while (++i < len) {
-      val = _value[i];
+      val = _elemArray[i];
       if (val[test] === value) {
         fn = val[key];
         if (typeof fn === 'function') {
@@ -703,10 +705,10 @@ List = (function () {
 
   var List = function (tabArray) {
     var i = -1, len = tabArray.length;
-    _value = Array(len);
+    _elemArray = Array(len);
     while (++i < len) {
-      _value[i] = new Tab(tabArray[i]);
-      _list.appendChild(_value[i].buttonHTML);
+      _elemArray[i] = new Tab(tabArray[i]);
+      _list.appendChild(_elemArray[i].buttonHTML);
     }
     setActive(0);
     chrome.runtime.sendMessage({ type: 'loadFavIcons' }, function (newFavIcons) {
@@ -716,12 +718,13 @@ List = (function () {
   };
 
   List.prototype.selectMatched = function () {
-    if (!$search.input.value) { return; }
+    if ($search.isEmpty()) { return; }
     forEachTest('select', 'partial', false);
+    return this;
   };
 
   List.prototype.toggleActiveSelection = function () {
-    var activeElem = _value[_active];
+    var activeElem = _elemArray[_active];
     if (!activeElem) { return; }
     if (activeElem.selected) {
       activeElem.unselect();
@@ -729,20 +732,32 @@ List = (function () {
       activeElem.select();
     }
     setSelectingState(!!(getAllSelectedTabs().length));
+    return this;
   };
 
-  List.prototype.refresh = function (key) {
+  List.prototype.render = function () {
+    var i = -1, len = _elemArray.length, elem, btn, buttons = _list.childNodes;
+    while (++i < len) {
+      elem = _elemArray[i];
+      btn = buttons[i];
+      if (elem.elemId !== btn.dataset.id) {
+        _list.insertBefore(elem, btn);
+      }
+    }
+    return this;
+  }
+
+  List.prototype.update = function (pattern) {
     if ($search.isEmpty()) {
-      $search.input.classList.remove('invalid');
-      return showTabs(initialTabsSort);
+      $search.valid();
+      return this.sort();
     }
 
-    var i = -1, len = _value.length,
-        pattern = $match.normalize(_prevInputValue.toLowerCase()).replace(/-/g, ''),
-        noMatch = true;
+    var i = -1, len = _elemArray.length, noMatch = true;
 
+    pattern = $match.normalize(pattern).replace(/-/g, '');
     while (++i < len) {
-      var elem = _value[i];
+      var elem = _elemArray[i];
       elem.match(pattern);
       if (!elem.partial) {
         noMatch = false;
@@ -750,87 +765,78 @@ List = (function () {
     }
     if (noMatch) {
       // set class no match on input
-      $search.input.classList.add('invalid');
+      $search.invalid();
     } else {
       showTabs(scoreTabsSort);
-      $search.input.classList.remove('invalid');
+      $search.valid();
     }
+    return this;
+  };
+
+  List.prototype.sort = function () {
+    _elemArray.sort(function (a, b) {
+      return a.compare(b);
+    })
+    return this;
   };
 
   List.prototype.clear = function () {
     while (_list.hasChildNodes()) {
       _list.removeChild(_list.lastChild);
     }
+    return this;
   };
 
   List.prototype.activate = function (elemId) {
     forEachTest('activate', 'elemId', elemId);
+    return this;
   };
 
   List.prototype.open = function (elemId) {
     forEachTest('open', 'elemId', elemId);
+    return this;
   };
 
   List.prototype.remove = function (elemId) {
     forEachTest('close', 'elemId', elemId);
+    return this;
   };
 
   List.prototype.forEachSelected = function (key) {
     forEachTest(key, 'selected', true);
+    return this;
   };
 
-  List.prototype.indexOf = function (key, value, fallback) {
-    var ret = value ? getIndexWithKey(key, value) : getIndex(key);
-    if (value) {
-      ret = getIndexWithKey(key, value);
-      if (ret) { return ret; }
-      if (fallback === 'last') {
-        return _value[_value.length - 1][key];
-      } else if (fallback === 'first') {
-        return _value[0][key];
-      }
-    } else {
-      ret = getIndex(key);
-      if (ret) { return ret; }
-      if (fallback === 'last') {
-        return _value[_value.length - 1];
-      } else if (fallback === 'first') {
-        return _value[0];
-      }
-    }
-    return ret;
-  };
-
-  List.prototype[9] = function (e) {  // Key Tab
+  List.prototype[$state.opts.key.select] = function (e) {
     if (_active === -1) { return; }
     e.preventDefault();
     $list.toggleActiveSelection();
   };
 
-  List.prototype[13] = function (e) {  // Key Enter
-    _value[_active].open();
+  List.prototype[$state.opts.key.enter] = function (e) {
+    _elemArray[_active].open();
   };
 
-  List.prototype[27] = function (e) {  // Key esc
+  List.prototype[$state.opts.key.cancel] = function (e) {
     if ($state.isSelecting()) {  
-      _value.forEach(function (tab) {
+      _elemArray.forEach(function (tab) {
         tab.unselect();
       });
       setSelectingState(false);
     }
   };
 
-  List.prototype[38] = function (e) {  // key Up
+  List.prototype[$state.opts.key.up] = function (e) {
     setActive(_active - 1);
     e.preventDefault();
   };
 
-  List.prototype[40] = function (e) {  // key Down
+  List.prototype[$state.opts.key.down] = function (e) {
     setActive(_active + 1);
     e.preventDefault();
   };
 
-  List.prototype[65] = function (e) {  // Key A
+  List.prototype[$state.opts.key.all] = function (e) {
     $list.selectMatched();
     e.preventDefault();
   };
@@ -841,7 +847,7 @@ List = (function () {
 var $handlers = (function () {
 
   // Subscribe to DOM events
-  $search.input.onkeydown = function (event) {
+  $search.onkeydown(function (event) {
     var fn = $list[event.keyCode];
     if (typeof fn === 'function') {
       fn(event);
@@ -850,7 +856,7 @@ var $handlers = (function () {
       $list.actionOnSelected($ez.getEventKey(event));
       event.preventDefault();
     }
-  };
+  });
 
   function checkClickedElement(elem) {
     if (elem.tagName !== "BUTTON") {
@@ -882,7 +888,7 @@ function setInfo(bgInfo) {
   $state.setWindowId(bgInfo.currentTab.windowId);
   $match = Match($state.opts.match);
   $list = new List(bgInfo.tabs);
-  $list.refresh();
+  $list.update();
 }
 
 // Start it all !
@@ -900,7 +906,7 @@ function init() {
   // Init handlers
   $handlers();
 
-  $search.input.focus();
+  $search.focus();
 }
 
 init();
