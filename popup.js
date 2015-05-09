@@ -29,7 +29,7 @@ var $ez = (function () {
       return eventKey;
     }
   };
-});
+})();
 
 
 // State shared globals
@@ -580,7 +580,7 @@ var $handler = (function () {
 });
 
 function setInfo(bgInfo) {
-  $ez.setMap(bgInfo.map);
+  $ez.normalize(bgInfo.map);
   $state.setWindowId(bgInfo.currentTab.windowId);
   _list = bgInfo.tabs;
   _list.forEach(createButtonHTML);
