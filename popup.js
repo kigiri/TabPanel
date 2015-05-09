@@ -721,6 +721,16 @@ List = (function () {
     return this;
   };
 
+  List.prototype.hasSelectedElement = function () {
+    var i = -1; len = _elemArray.length;
+    while (++i < len) {
+      if (_elemArray[i].selected) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   List.prototype.toggleActiveSelection = function () {
     var activeElem = _elemArray[_active];
     if (!activeElem) { return; }
@@ -729,7 +739,7 @@ List = (function () {
     } else {
       activeElem.select();
     }
-    setSelectingState(!!(getAllSelectedTabs().length));
+    $state.setSelectingState(this.hasSelectedElement());
     return this;
   };
 
@@ -745,10 +755,15 @@ List = (function () {
     return this;
   }
 
+  List.prototype.refresh = function () {
+    forEach('update');
+    return this;
+  }
+
   List.prototype.update = function (pattern) {
     if ($search.isEmpty()) {
       $search.valid();
-      return this.sort();
+      return this.sort().refresh().render();
     }
 
     var i = -1, len = _elemArray.length, noMatch = true;
@@ -766,7 +781,7 @@ List = (function () {
       $search.invalid();
     } else {
       this.sort('byScore');
-      $search.valid();
+      $search.valid().refresh().render();
     }
     return this;
   };
@@ -806,38 +821,39 @@ List = (function () {
     return this;
   };
 
-  List.prototype[$state.opts.key.select] = function (e) {
+  List.prototype[$state.opts.key.select] = function (event) {
     if (_active === -1) { return; }
-    e.preventDefault();
+    event.preventDefault();
     $list.toggleActiveSelection();
   };
 
-  List.prototype[$state.opts.key.enter] = function (e) {
+  List.prototype[$state.opts.key.enter] = function (event) {
     _elemArray[_active].open();
   };
 
-  List.prototype[$state.opts.key.cancel] = function (e) {
+  List.prototype[$state.opts.key.cancel] = function (event) {
     if ($state.isSelecting()) {  
       _elemArray.forEach(function (tab) {
         tab.unselect();
       });
-      setSelectingState(false);
+      $state.setSelectingState(false);
     }
   };
 
-  List.prototype[$state.opts.key.up] = function (e) {
+  List.prototype[$state.opts.key.up] = function (event) {
     setActive(_active - 1);
-    e.preventDefault();
+    event.preventDefault();
   };
 
-  List.prototype[$state.opts.key.down] = function (e) {
+  List.prototype[$state.opts.key.down] = function (event) {
     setActive(_active + 1);
-    e.preventDefault();
+    event.preventDefault();
   };
 
-  List.prototype[$state.opts.key.all] = function (e) {
-    $list.selectMatched();
-    e.preventDefault();
+  List.prototype[$state.opts.key.all] = function (event) {
+    if ($state.isSelecting()) {
+      $list.selectMatched();
+    }
   };
 
   return List;
@@ -852,7 +868,7 @@ var $handlers = (function () {
       fn(event);
     }
     if ($state.isSelecting()) {
-      $list.actionOnSelected($ez.getEventKey(event));
+      $list.forEachSelected($ez.getEventKey(event));
       event.preventDefault();
     }
   });
@@ -865,19 +881,19 @@ var $handlers = (function () {
     return elem;
   }
 
-  document.body.onmousedown = function (e) {
-    if (checkClickedElement(e.target) && e.which === 2) {
+  document.body.onmousedown = function (event) {
+    if (checkClickedElement(event.target) && event.which === 2) {
       return false;
     }
   };
 
-  document.body.onmouseup = function (e) {
-    var elem = checkClickedElement(e.target);
+  document.body.onmouseup = function (event) {
+    var elem = checkClickedElement(event.target);
     if (!elem) { return; }
-    if (e.which === 2) {
+    if (event.which === 2) {
       $list.remove(elem.dataset.id);
-      e.preventDefault();
-    } else if (e.which === 1) {
+      event.preventDefault();
+    } else if (event.which === 1) {
       $list.open(elem.dataset.id);
     }
   };
