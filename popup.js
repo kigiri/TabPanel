@@ -37,10 +37,14 @@ var $state = (function () {
   var _isSelecting = false,
       _currentWindowId = 0,
       _opts = {
-    // TODO: load and store opts
-    // Hide private navigation tabs form the results
-    hideIncognito: true
-  };
+        // TODO: load and store opts
+        // Hide private navigation tabs form the results
+        hideIncognito: true,
+        key: {
+          move: 77,
+          close: 87
+        }
+      };
 
   return {
     matchType: 'fuzzy',
