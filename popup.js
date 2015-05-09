@@ -1,20 +1,8 @@
-﻿var $ez, $list, $state, $search, $handlers,
-    Elem, Tab, List;
+﻿var $ez, $list, $state, $search, $handlers, $match,
+    Elem, Tab, List, Match;
 
 $ez = (function () {
-  function normalize(_normalizeMap) {
-    normalize = function (str) {
-      var normalized_str = '';
-
-      for (var i = 0; i < str.length; i++) {
-        normalized_str += (_normalizeMap[str[i]] || '-');
-      }
-      return normalized_str;
-    };
-  }
-
   return {
-    normalize: normalize,
     emptyFallback: function () {},
     toTabIdArray: function (tab) { return tab.id; },
     getEventKey: function (event) {
@@ -33,6 +21,299 @@ $ez = (function () {
   };
 })();
 
+Match = (function (opts) {
+  var normalizeMap = {
+    'á': 'a', 'ă': 'a', 'ắ': 'a', 'ặ': 'a', 'ằ': 'a', 'ẳ': 'a', 'ẵ': 'a',
+    'ǎ': 'a', 'â': 'a', 'ấ': 'a', 'ậ': 'a', 'ầ': 'a', 'ẩ': 'a', 'ẫ': 'a',
+    'ä': 'a', 'ǟ': 'a', 'ȧ': 'a', 'ǡ': 'a', 'ạ': 'a', 'ȁ': 'a', 'à': 'a',
+    'ả': 'a', 'ȃ': 'a', 'ā': 'a', 'ą': 'a', 'ᶏ': 'a', 'ẚ': 'a', 'å': 'a',
+    'ǻ': 'a', 'ḁ': 'a', 'ⱥ': 'a', 'ã': 'a', 'ḃ': 'b', 'ḅ': 'b', 'ɓ': 'b',
+    'ḇ': 'b', 'ᵬ': 'b', 'ᶀ': 'b', 'ƀ': 'b', 'ƃ': 'b', 'ɵ': 'o', 'ć': 'c',
+    'č': 'c', 'ç': 'c', 'ḉ': 'c', 'ĉ': 'c', 'ɕ': 'c', 'ċ': 'c', 'ƈ': 'c',
+    'ȼ': 'c', 'ď': 'd', 'ḑ': 'd', 'ḓ': 'd', 'ȡ': 'd', 'ḋ': 'd', 'ḍ': 'd',
+    'ɗ': 'd', 'ᶑ': 'd', 'ḏ': 'd', 'ᵭ': 'd', 'ᶁ': 'd', 'đ': 'd', 'ɖ': 'd',
+    'ƌ': 'd', 'ı': 'i', 'ȷ': 'j', 'ɟ': 'j', 'ʄ': 'j', 'é': 'e', 'ĕ': 'e',
+    'ě': 'e', 'ȩ': 'e', 'ḝ': 'e', 'ê': 'e', 'ế': 'e', 'ệ': 'e', 'ề': 'e',
+    'ể': 'e', 'ễ': 'e', 'ḙ': 'e', 'ë': 'e', 'ė': 'e', 'ẹ': 'e', 'ȅ': 'e',
+    'è': 'e', 'ẻ': 'e', 'ȇ': 'e', 'ē': 'e', 'ḗ': 'e', 'ḕ': 'e', 'ⱸ': 'e',
+    'ę': 'e', 'ᶒ': 'e', 'ɇ': 'e', 'ẽ': 'e', 'ḛ': 'e', 'ḟ': 'f', 'ƒ': 'f',
+    'ᵮ': 'f', 'ᶂ': 'f', 'ǵ': 'g', 'ğ': 'g', 'ǧ': 'g', 'ģ': 'g', 'ĝ': 'g',
+    'ġ': 'g', 'ɠ': 'g', 'ḡ': 'g', 'ᶃ': 'g', 'ǥ': 'g', 'ḫ': 'h', 'ȟ': 'h',
+    'ḩ': 'h', 'ĥ': 'h', 'ⱨ': 'h', 'ḧ': 'h', 'ḣ': 'h', 'ḥ': 'h', 'ɦ': 'h',
+    'ẖ': 'h', 'ħ': 'h', 'í': 'i', 'ĭ': 'i', 'ǐ': 'i', 'î': 'i', 'ï': 'i',
+    'ḯ': 'i', 'ị': 'i', 'ȉ': 'i', 'ì': 'i', 'ỉ': 'i', 'ȋ': 'i', 'ī': 'i',
+    'į': 'i', 'ᶖ': 'i', 'ɨ': 'i', 'ĩ': 'i', 'ḭ': 'i', 'ꝺ': 'd', 'ꝼ': 'f',
+    'ᵹ': 'g', 'ꞃ': 'r', 'ꞅ': 's', 'ꞇ': 't', 'ǰ': 'j', 'ĵ': 'j', 'ʝ': 'j',
+    'ɉ': 'j', 'ḱ': 'k', 'ǩ': 'k', 'ķ': 'k', 'ⱪ': 'k', 'ꝃ': 'k', 'ḳ': 'k',
+    'ƙ': 'k', 'ḵ': 'k', 'ᶄ': 'k', 'ꝁ': 'k', 'ꝅ': 'k', 'ĺ': 'l', 'ƚ': 'l',
+    'ɬ': 'l', 'ľ': 'l', 'ļ': 'l', 'ḽ': 'l', 'ȴ': 'l', 'ḷ': 'l', 'ḹ': 'l',
+    'ⱡ': 'l', 'ꝉ': 'l', 'ḻ': 'l', 'ŀ': 'l', 'ɫ': 'l', 'ᶅ': 'l', 'ɭ': 'l',
+    'ł': 'l', 'ſ': 's', 'ẜ': 's', 'ẛ': 's', 'ẝ': 's', 'ḿ': 'm', 'ṁ': 'm',
+    'ṃ': 'm', 'ɱ': 'm', 'ᵯ': 'm', 'ᶆ': 'm', 'ń': 'n', 'ň': 'n', 'ņ': 'n',
+    'ṋ': 'n', 'ȵ': 'n', 'ṅ': 'n', 'ṇ': 'n', 'ǹ': 'n', 'ɲ': 'n', 'ṉ': 'n',
+    'ƞ': 'n', 'ᵰ': 'n', 'ᶇ': 'n', 'ɳ': 'n', 'ñ': 'n', 'ó': 'o', 'ŏ': 'o',
+    'ǒ': 'o', 'ô': 'o', 'ố': 'o', 'ộ': 'o', 'ồ': 'o', 'ổ': 'o', 'ỗ': 'o',
+    'ö': 'o', 'ȫ': 'o', 'ȯ': 'o', 'ȱ': 'o', 'ọ': 'o', 'ő': 'o', 'ȍ': 'o',
+    'ò': 'o', 'ỏ': 'o', 'ơ': 'o', 'ớ': 'o', 'ợ': 'o', 'ờ': 'o', 'ở': 'o',
+    'ỡ': 'o', 'ȏ': 'o', 'ꝋ': 'o', 'ꝍ': 'o', 'ⱺ': 'o', 'ō': 'o', 'ṓ': 'o',
+    'ṑ': 'o', 'ǫ': 'o', 'ǭ': 'o', 'ø': 'o', 'ǿ': 'o', 'õ': 'o', 'ṍ': 'o',
+    'ṏ': 'o', 'ȭ': 'o', 'ɛ': 'e', 'ᶓ': 'e', 'ɔ': 'o', 'ᶗ': 'o', 'ṕ': 'p',
+    'ṗ': 'p', 'ꝓ': 'p', 'ƥ': 'p', 'ᵱ': 'p', 'ᶈ': 'p', 'ꝕ': 'p', 'ᵽ': 'p',
+    'ꝑ': 'p', 'ꝙ': 'q', 'ʠ': 'q', 'ɋ': 'q', 'ꝗ': 'q', 'ŕ': 'r', 'ř': 'r',
+    'ŗ': 'r', 'ṙ': 'r', 'ṛ': 'r', 'ṝ': 'r', 'ȑ': 'r', 'ɾ': 'r', 'ᵳ': 'r',
+    'ȓ': 'r', 'ṟ': 'r', 'ɼ': 'r', 'ᵲ': 'r', 'ᶉ': 'r', 'ɍ': 'r', 'ɽ': 'r',
+    'ↄ': 'c', 'ꜿ': 'c', 'ɘ': 'e', 'ɿ': 'r', 'ś': 's', 'ṥ': 's', 'š': 's',
+    'ṧ': 's', 'ş': 's', 'ŝ': 's', 'ș': 's', 'ṡ': 's', 'ṣ': 's', 'ṩ': 's',
+    'ʂ': 's', 'ᵴ': 's', 'ᶊ': 's', 'ȿ': 's', 'ɡ': 'g', 'ᴑ': 'o', 'ᴓ': 'o',
+    'ᴝ': 'u', 'ť': 't', 'ţ': 't', 'ṱ': 't', 'ț': 't', 'ȶ': 't', 'ẗ': 't',
+    'ⱦ': 't', 'ṫ': 't', 'ṭ': 't', 'ƭ': 't', 'ṯ': 't', 'ᵵ': 't', 'ƫ': 't',
+    'ʈ': 't', 'ŧ': 't', 'ɐ': 'a', 'ǝ': 'e', 'ᵷ': 'g', 'ɥ': 'h', 'ʮ': 'h',
+    'ʯ': 'h', 'ᴉ': 'i', 'ʞ': 'k', 'ꞁ': 'l', 'ɯ': 'm', 'ɰ': 'm', 'ɹ': 'r',
+    'ɻ': 'r', 'ɺ': 'r', 'ⱹ': 'r', 'ʇ': 't', 'ʌ': 'v', 'ʍ': 'w', 'ʎ': 'y',
+    'ú': 'u', 'ŭ': 'u', 'ǔ': 'u', 'û': 'u', 'ṷ': 'u', 'ü': 'u', 'ǘ': 'u',
+    'ǚ': 'u', 'ǜ': 'u', 'ǖ': 'u', 'ṳ': 'u', 'ụ': 'u', 'ű': 'u', 'ȕ': 'u',
+    'ù': 'u', 'ủ': 'u', 'ư': 'u', 'ứ': 'u', 'ự': 'u', 'ừ': 'u', 'ử': 'u',
+    'ữ': 'u', 'ȗ': 'u', 'ū': 'u', 'ṻ': 'u', 'ų': 'u', 'ᶙ': 'u', 'ů': 'u',
+    'ũ': 'u', 'ṹ': 'u', 'ṵ': 'u', 'ⱴ': 'v', 'ꝟ': 'v', 'ṿ': 'v', 'ʋ': 'v',
+    'ᶌ': 'v', 'ⱱ': 'v', 'ṽ': 'v', 'ẃ': 'w', 'ŵ': 'w', 'ẅ': 'w', 'ẇ': 'w',
+    'ẉ': 'w', 'ẁ': 'w', 'ⱳ': 'w', 'ẘ': 'w', 'ẍ': 'x', 'ẋ': 'x', 'ᶍ': 'x',
+    'ý': 'y', 'ŷ': 'y', 'ÿ': 'y', 'ẏ': 'y', 'ỵ': 'y', 'ỳ': 'y', 'ƴ': 'y',
+    'ỷ': 'y', 'ỿ': 'y', 'ȳ': 'y', 'ẙ': 'y', 'ɏ': 'y', 'ỹ': 'y', 'ź': 'z',
+    'ž': 'z', 'ẑ': 'z', 'ʑ': 'z', 'ⱬ': 'z', 'ż': 'z', 'ẓ': 'z', 'ȥ': 'z',
+    'ẕ': 'z', 'ᵶ': 'z', 'ᶎ': 'z', 'ʐ': 'z', 'ƶ': 'z', 'ɀ': 'z', 'ₐ': 'a',
+    'ₑ': 'e', 'ᵢ': 'i', 'ⱼ': 'j', 'ₒ': 'o', 'ᵣ': 'r', 'ᵤ': 'u', 'ᵥ': 'v',
+    'ₓ': 'x', '.': '*', ',': ' ', ':': ' ', ';': ' ', '[': ' ', ']': ' ',
+    '(': ' ', ')': ' ', '{': ' ', '}': ' ', ' ': ' ', '-': '*', '_': ' ',
+    '&': '*', '|': '*', '=': '*', '*': '*', '+': '+', "'": '*', '"': '*',
+    '/': '*', '<': '*', '>': '*', '#': '#', '\\': '*'
+  };
+
+  function normalize(str) {
+    if (!opts.normalized) { return str; }
+    if (!str) { return ''; }
+    var normalized_str = '';
+    var c, i;
+
+    for (i = 0; i < str.length; i++) {
+      c = str[i];
+      if (/[0-9A-Za-z]/i.test(c)) {
+        normalized_str += c;
+      } else {
+        normalized_str += (normalizeMap[str[i]] || '*');
+      }
+    }
+    return opts.caseInsensitive ? normalized_str.toLowerCase() : normalized_str;
+  }
+
+  function renderIndexArray(arr, baseStr) {
+    if (!opts.renderResultToHtml) { return arr; }
+    if (!Array.isArray(arr) || !arr.length) { return baseStr; }
+    var strHTML = '';
+    var prevIdx = null;
+    var openTag = false;
+    for (var i = 0; i < baseStr.length; i++) {
+      var idx = arr[arr.indexOf(i)];
+      if (typeof idx === 'number') {
+        if (idx - 1 !== prevIdx) {
+          strHTML += '<b>';
+          openTag = true;
+        }
+        prevIdx = idx;
+      } else if ((prevIdx !== null) && openTag) {
+        strHTML += '</b>';
+        openTag = false;
+      }
+      strHTML += baseStr[i];
+    }
+    if (openTag) {
+      strHTML += '</b>';
+    }
+    return strHTML;
+  }
+
+  function makeMatchObject(score, matched, partial) {
+    return {
+      'score': score,
+      'matched': matched,
+      'partial': partial
+    };
+  }
+
+  function fuzzy(str, pattern, s, p, score, bonus, matched, deepness) {
+    // End of the pattern, successfull match
+    if (p >= pattern.length) {
+      return makeMatchObject(score + (s >= str.length), matched, false);
+    }
+
+    // End of the string, failed to match all the pattern, apply penalty to score
+    if (s >= str.length) {
+      return makeMatchObject(score, matched, true);
+    }
+
+    var c = str[s];
+    var lowerC = c.toLowerCase();
+    if (lowerC === pattern[p]) {
+      // Look a head to find best possible match
+      var altMatch;
+      if (deepness > 0) {
+        altMatch = fuzzy(str, pattern, s+1, p, score, 0, matched.slice(), deepness - 1);
+      }
+
+      // Store current match and calculate bonus
+      matched.push(s);
+
+      // Bonus for capitals
+      if (c !== lowerC) {
+        score += 3;
+      }
+      score += 1 + bonus;
+      bonus += 5;
+      var match = fuzzy(str, pattern, s+1, p+1, score, bonus, matched, deepness);
+      // Return the best score
+      return (!altMatch || altMatch.score <= match.score) ? match : altMatch;
+    } else {
+      // TODO: If we don't have any bonus, this could be an inverted type
+      // try to match previous char with current and current with previous
+
+      // If nothing matched, recalculate bonus
+      bonus = (c === '*' || c === ' ') ? 3 : 0;
+      return fuzzy(str, pattern, s+1, p, score, bonus, matched, deepness);
+    }
+  }
+
+  // adapted from https://github.com/hiddentao/fast-levenshtein
+  function levenshtein(str, pattern) {
+    var l1 = str.length;
+    var l2 = pattern.length;
+
+    // base cases
+    if (!l1 || !l2) { return 0 };
+    if (Math.abs(l1 - l2) > 3) { return 0; }
+    if (str === pattern) { return 1 };
+
+    // two rows
+    var curCol, nextCol, i, j, tmp;
+    var prevRow = new Array(l2 + 1);
+
+    // initialise previous row
+    for (i = 0; i <= l2; i++) {
+      prevRow[i] = i;
+    }
+
+    // calculate current row distance from previous row
+    for (i = 0; i < l1; i++) {
+      nextCol = i + 1;
+
+      for (j = 0; j < l2; j++) {
+        curCol = nextCol;
+
+        // substution
+        nextCol = prevRow[j] + (str[i] !== pattern[j]);
+        // insertion
+        tmp = curCol + 1;
+        if (nextCol > tmp) {
+          nextCol = tmp;
+        }
+        // deletion
+        tmp = prevRow[j + 1] + 1;
+        if (nextCol > tmp) {
+          nextCol = tmp;
+        }
+
+        // copy current col value into previous (in preparation for next iteration)
+        prevRow[j] = curCol;
+      }
+
+      if (nextCol > 3) { return 0; }
+      // copy last col value into previous (in preparation for next iteration)
+      prevRow[j] = nextCol;
+    }
+
+    // get relative value from tested word length
+    nextCol /= l2;
+    return (nextCol <  1) ? 0 : 1 - nextCol;
+  }
+
+  function renderMatch(str, score, length, end) {
+    str = str.slice(end - length, end);
+    if (score < 0.5) { return str; }
+    if (score > 0.95) { return '<span class="match-high">'+ str +'</span>'; }
+    if (score > 0.75) { return '<span class="match-low">'+ str +'</span>'; }
+    return '<span class="match-low">'+ str +'</span>';
+  }
+
+  function matchWholeWord(block, pattern, algo) {
+    var c, i, score;
+    var txt = block.normalized;
+    var word = '';
+    var maxScore = 0;
+    var matches = [];
+    block.result = '';
+
+    for (i = 0; i < txt.length; i++) {
+      c = txt[i];
+      if (c === ' ' && word.length) {
+        score = algo(word, pattern);
+        block.result += renderMatch(block.str, score, word.length, i);
+        block.result += block.str[i];
+        word = '';
+        if (score > maxScore) {
+          maxScore = score;
+        }
+      } else {
+        word += c;
+      }
+    }
+
+    if (word.length) {
+      score = algo(word, pattern);
+      block.result += renderMatch(block.str, score, word.length, i);
+      if (score > maxScore) {
+        maxScore = score;
+      }
+    }
+    return maxScore;
+  }
+
+  function exact(block, pattern) {
+    return +(block === pattern);
+  }
+
+  return {
+    normalize: normalize,
+    byScore: function (a, b) {
+      if (a.score != b.score) {
+        return (a.score > b.score) ? -1 : 1;
+      }
+      return (a.str < b.str) ? -1 : 1;
+    },
+
+    exact: function (block, pattern) {
+      return matchWholeWord(block, pattern, exact);
+    },
+
+    levenshtein: function (block, pattern) {
+      return matchWholeWord(block, pattern, levenshtein);
+    },
+
+    fuzzy: function (block, pattern) {
+      var bestMatch = fuzzy(block.normalized, pattern, 0, 0, 0, 8, [], 6);
+      block.score = bestMatch.score; // += ?
+      block.result = renderIndexArray(bestMatch.matched, block.str);
+      return bestMatch.partial ? 0 : 1;
+    },
+
+    toBlock: function (str) {
+      return {
+        str: str,
+        normalized: normalize(str),
+        score: 0,
+        result: str
+      }
+    }
+  }
+});
+
 
 // State shared globals
 $state = (function () {
@@ -45,6 +326,11 @@ $state = (function () {
         key: {
           move: 77,
           close: 87
+        },
+        match: {
+          caseInsensitive: false,
+          renderResultToHtml: false,
+          normalized: true
         }
       };
 
@@ -194,17 +480,28 @@ Tab = (function () {
   }
 
   var Tab = function (tab) {
+    var url;
+
     // init default values
     this.selected = false;
 
     // copy values of given tab
     _wantedKeys.forEach(function (key) {
       this[key] = tab[key];
-    });
+    }.bind(this));
 
+    // Prepare URL and Title
+    url = (this.url.match(/(^\S+\/\/)([^\/]+)(.+)/) || ['','', this.url,'/']);
+    this.hostname = $match.toBlock(url[2]);
+    this.pathname = $match.toBlock(url[3]);
+    this.title = $match.toBlock(this.title);
+
+    // Generate Children
     this.h3 = document.createElement('h3');
     this.span = document.createElement('span');
     Elem.call(this, 'tab', [this.h3, this.span]);
+
+    // Populate children content
     this.update();
   }
 
@@ -439,7 +736,7 @@ List = (function () {
     }
 
     var i = -1, len = _value.length,
-        pattern = $ez.normalize(_prevInputValue.toLowerCase()).replace(/-/g, ''),
+        pattern = $match.normalize(_prevInputValue.toLowerCase()).replace(/-/g, ''),
         noMatch = true;
 
     while (++i < len) {
@@ -580,8 +877,8 @@ var $handlers = (function () {
 });
 
 function setInfo(bgInfo) {
-  $ez.normalize(bgInfo.map);
   $state.setWindowId(bgInfo.currentTab.windowId);
+  $match = Match($state.opts.match);
   $list = new List(bgInfo.tabs);
   $list.refresh();
 }
@@ -599,7 +896,7 @@ function init() {
   setInterval($search.update, 35);
 
   // Init handlers
-  $handler();
+  $handlers();
 
   $search.input.focus();
 }
