@@ -2,21 +2,22 @@
 var $elem = document.all;
 var $input = $elem.search;
 
-var $ez = (function (_normalizeMap) {
-
-  return {
-    normalize: function (str) {
+var $ez = (function () {
+  function normalize(_normalizeMap) {
+    normalize = function (str) {
       var normalized_str = '';
 
       for (var i = 0; i < str.length; i++) {
         normalized_str += (_normalizeMap[str[i]] || '-');
       }
       return normalized_str;
-    },
+    };
+  }
 
-    toTabIdArray: function (tab) {
-      return tab.id;
-    }
+  return {
+    normalize: normalize,
+    emptyFallback: function () {},
+    toTabIdArray: function (tab) { return tab.id; }
   };
 });
 
@@ -32,6 +33,7 @@ var $state = (function () {
   };
 
   return {
+    matchType: 'fuzzy',
     isSelecting: function () {
       return _isSelecting;
     },
@@ -93,20 +95,35 @@ var Elem = (function (){
     }
   })();
 
+  Elem.prototype.match = function () { }; // 
+
+  Elem.prototype.compare = function (elem) {
+    return this.elemId - elem.elemId;
+  };
+
+  Elem.prototype.byScore = function (elem) {
+    if (elem.partial && !this.partial) { return -1; }
+    if (this.partial && !elem.partial) { return  1; }
+    if (elem.score !== this.score) { return elem.score - this.score; }
+    return this.compare(elem);
+  }
+
   Elem.prototype.update = function () {
     if ($search.isEmpty()) {
       this.setCssFull();
     }
   };
 
-  Elem.prototype.setCssPartial = function () {
+  Elem.prototype.setPartialMatch = function () {
     this.css.remove('match-full');
     this.css.add('match-partial');
+    this.partial = true;
   };
 
-  Elem.prototype.setCssFull = function () {
+  Elem.prototype.setFullMatch = function () {
     this.css.remove('match-partial');
     this.css.add('match-full');
+    this.partial = false;
   };
 
   Elem.prototype.select = function () {
@@ -135,6 +152,12 @@ var Tab = (function () {
       'id'
     ];
 
+  function handleFavIconLoadfailure(event) {
+    this.css.add('not-found');
+    this.favIconUrl = '';
+    event.target.remove();
+  }
+
   var Tab = function (tab) {
     // init default values
     this.selected = false;
@@ -153,14 +176,27 @@ var Tab = (function () {
   Tab.prototype = Object.create(Elem.prototype);
 
   Tab.prototype.update = function () {
-    if ($search.isMatched()) {
-      this.h3.innerHTML = tab.title.HTML;
-      this.span.innerHTML = '<i>'+ tab.hostname.HTML +'</i>'+ tab.pathname.HTML;
+    if ($search.isEmpty()) {
+      this.h3.innerHTML = this.title.str;
+      this.span.innerHTML = '<i>'+ this.hostname.str
+                          +'</i>'+ this.pathname.str;
     } else {
-      this.h3.innerHTML = tab.title.str;
-      this.span.innerHTML = '<i>'+ tab.hostname.str +'</i>'+ tab.pathname.str;
+      this.h3.innerHTML = this.title.HTML;
+      this.span.innerHTML = '<i>'+ this.hostname.HTML
+                          +'</i>'+ this.pathname.HTML;
     }
+  };
 
+  Tab.prototype.match = function (pattern) {
+    var match = $match[$state.matchType],
+        ret = match(this.hostname, pattern)
+            + match(this.pathname, pattern)
+            + match(this.title, pattern);
+
+    this[(ret) ? 'setFullMatch' : 'setPartialMatch']();
+    this.score = this.hostname.score * 2
+               + this.pathname.score
+               + this.title.score;
   };
 
   Tab.prototype.setFavIcon = function (newFavIcons) {
@@ -182,11 +218,14 @@ var Tab = (function () {
 
     if (typeof iconData === 'string') {
       img = document.createElement('img');
+
       img.src = iconData;
+      img.onError = handleFavIconLoadfailure.bind(this);
       favIcon.appendChild(img);
     } else {
       favIcon.classList.add('not-found');
     }
+    this.favIconDiv = favIcon;
     this.buttonHTML.appendChild(favIcon);
     return this;
   };
@@ -198,14 +237,66 @@ var Tab = (function () {
     return this;
   };
 
-  Tab.prototype[77] = function (e) {  // key M
+  Tab.prototype.compare = function (tab) {
+    if (this.open.time || b.open.time) {
+      if (this.open.fresh) {
+        if (b.open.fresh) { return this.open.time - b.open.time; }
+        return -1;
+      } else if (b.open.fresh) { return 1; }
+      return b.open.time - this.open.time;
+    }
+    if (this.windowId !== b.windowId) {
+      if (this.windowId === $state.getWindowId()) { return -1; }
+      if (b.windowId === $state.getWindowId()) { return 1; }
+      return b.windowId - this.windowId;
+    }
+    return Elem.prototype.compare.call(this, tab);
+  };
+
+  // Chrome API methods
+  Tab.prototype.open = function () {
+    chrome.tabs.update(this.id, { 'active': true });
+    if (this.windowId !== $state.getWindowId()) {
+      chrome.windows.update(this.windowId, { 'focused': true });
+    }
+    // TODO: May want to call window.close(); after this method...
+    return this;
+  };
+
+  Tab.prototype.move = function (windowId) {
+    chrome.tabs.move(this.id, {
+      index: -1,
+      windowId: windowId
+    }, function () {
+      selectedTabs.forEach(function (tab) {
+        unselectTab(tab);
+        tab.windowId = $state.getWindowId();
+        tab.css.add('current');
+      });
+      setSelectingState(false);
+      refreshInputMatching();
+      $input.select();
+    });
+    return this;
+  };
+
+  /*
+   * call back exemple:
+   * remove from _value
+   * _list.removeChild(tab.buttonHTML);
+   */
+  Tab.prototype.close = function (callback) {
+    chrome.tabs.remove(this.id, (callback || $ez.emptyFallback));
+    this.buttonHTML.remove();
+  };
+
+  // KeyCode handlers
+  Tab.prototype[$state.opts.key.move] = function () {  // key M
     this.move(windowId);
   };
 
-  Tab.prototype[87] = function (e) {  // Key W
-    if ($state.isSelecting()) {
-      closeSelectedTabs();
-    }
+  Tab.prototype[$state.opts.key.close] = function () {  // Key W
+    this.close();
   };
 
   return Tab;
@@ -215,8 +306,8 @@ var $search = (function () {
   var _prevInputValue = '';
 
   return {
-    isMatched: function () {
-      return !!_prevInputValue;
+    isEmpty: function () {
+      return !_prevInputValue;
     }
   };
 })();
@@ -291,13 +382,15 @@ var $list = (function () {
 
   var List = function (tabArray) {
     var i = -1, len = tabArray.length;
-    
     while (++i < len) {
       _list.appendChild(new Tab(tabArray[i]));
     }
-
     setActive(0);
   };
+
+  List.prototype.show = function () {
+    
+  }
 
   List.prototype.selectMatched = function () {
     if (!$input.value) { return; }
@@ -327,7 +420,7 @@ var $list = (function () {
 
     while (++i < len) {
       var elem = _value[i];
-      elem.match();
+      elem.match(pattern);
       if (!elem.partial) {
         noMatch = false;
       }
@@ -339,6 +432,24 @@ var $list = (function () {
       showTabs(scoreTabsSort);
       $input.classList.remove('invalid');
     }
+  };
+
+  List.prototype.clear = function () {
+    while (_list.hasChildNodes()) {
+      _list.removeChild(_list.lastChild);
+    }
+  };
+
+  List.prototype.activate = function (elemId) {
+    forEachTest('activate', 'elemId', elemId);
+  };
+
+  List.prototype.open = function (elemId) {
+    forEachTest('open', 'elemId', elemId);
+  };
+
+  List.prototype.remove = function (elemId) {
+    forEachTest('close', 'elemId', elemId);
   };
 
   List.prototype.forEachSelected = function (key) {
@@ -401,168 +512,6 @@ var $list = (function () {
   return List;
 })();
 
-
-// info on currentTab
-var $state.getWindowId() = null;
-
-// Activate focus on popup opening
-$input.focus();
-
-function getTabIndex(id) {
-  for (var i = 0; i < _list.length; i++) {
-    if (_list[i].id === id) {
-      return i;
-    }
-  }
-  return 0;
-}
-
-function getTab(id) {
-  return _list[getTabIndex(id)];
-}
-
-function setInfo(bgInfo) {
-  $ez = $ez(bgInfo.map);
-  $state.getWindowId() = bgInfo.currentTab.windowId;
-  _list = bgInfo.tabs;
-  _list.forEach(createButtonHTML);
-  showTabs(initialTabsSort);
-}
-
-// Generate tabs
-function showTabs(sortCallback) {
-  cleanTabList();
-  _list.sort(sortCallback);
-  appendAllTabs(_list, sortCallback);
-}
-
-// filters, sort and map callbacks
-function onlySelectedTabsFilter(tab) {
-  return tab.selected;
-}
-
-
-function filterOutAndRemoveSelected(tab) {
-  if (tab.selected) {
-    $elem.list.removeChild(tab.buttonHTML);
-    return false;
-  }
-  return true;
-}
-
-function filterSelected(tab) {
-  return !tab.selected;
-}
-
-function initialTabsSort(a, b) {
-  if (a.open.time || b.open.time) {
-    if (a.open.fresh) {
-      if (b.open.fresh) { return a.open.time - b.open.time; }
-      return -1;
-    } else if (b.open.fresh) { return 1; }
-    return b.open.time - a.open.time;
-  }
-  if (a.windowId !== b.windowId) {
-    if (a.windowId === $state.getWindowId()) { return -1; }
-    if (b.windowId === $state.getWindowId()) { return  1; }
-    return b.windowId - a.windowId;
-  }
-  return a.id - b.id;
-}
-
-function scoreTabsSort(a, b) {
-  if (b.partial && !a.partial) { return -1; }
-  if (a.partial && !b.partial) { return  1; }
-  if (b.score !== a.score) { return b.score - a.score; }
-  return initialTabsSort(a, b);
-}
-
-// Dom Stuff
-function isMatched() {
-  return !!_prevInputValue;
-}
-
-function handleFavIconLoadfailure(event) {
-  var t = event.target;
-  // Unset the favIcon url for this elem to avoid trying to refetch the favIcon
-  _list[getTabIndex(t.offsetParent.parentNode.dataset.id)].favIconUrl = '';
-  t.offsetParent.className += ' not-found';
-  t.remove();
-}
-
-function createButtonHTML(tab) {
-  var button = document.createElement('button');
-  button.dataset.id = tab.id;
-  button.appendChild(document.createElement('h3'));
-  button.appendChild(document.createElement('span'));
-  tab.buttonHTML = button;
-}
-
-// here I separate domain from url param to fine controle the score later
-
-function appendAllTabs() {
-  chrome.runtime.sendMessage({ type: 'loadFavIcons' }, function (newFavIcons) {
-    Tab.prototype.setFavIcon(newFavIcons);
-    $list.forEachSelected('generateFavIcon');
-  });
-}
-
-function cleanTabList() {
-  var l = $elem.list;
-  while (l.hasChildNodes()) {
-    l.removeChild(l.lastChild);
-  }
-}
-// Chrome Tabs Actions
-function openActiveTab() {
-  var activeTab = _list[_active];
-  chrome.tabs.update(activeTab.id, { 'active': true });
-  if (activeTab.windowId !== $state.getWindowId()) {
-    chrome.windows.update(activeTab.windowId, { 'focused': true });
-  }
-  window.close();
-}
-
-// Handle Select Actions
-function getAllSelectedTabs() {
-  return _list.filter(onlySelectedTabsFilter);
-}
-
-function closeSelectedTabs() {
-  chrome.tabs.remove(getAllSelectedTabs().map($ez.toTabIdArray), function () {
-    _list = _list.filter(filterOutAndRemoveSelected);
-    refreshInputMatching();
-  });
-}
-
-function closeTab(id) {
-  chrome.tabs.remove(id, function () {
-    _list = _list.filter(function (tab) {
-      if (tab.id !== id) { return true; }
-      $elem.list.removeChild(tab.buttonHTML);
-      return false;
-    });
-  });
-}
-
-function bringToWindow() {
-  var selectedTabs = getAllSelectedTabs();
-  chrome.tabs.move(selectedTabs.map($ez.toTabIdArray), {
-    index: -1,
-    windowId: $state.getWindowId()
-  }, function () {
-    selectedTabs.forEach(function (tab) {
-      unselectTab(tab);
-      tab.windowId = $state.getWindowId();
-      tab.css.add('current');
-    });
-    setSelectingState(false);
-    refreshInputMatching();
-    $input.select();
-  });
-}
-
-
 // Handle inputs require $list, $state
 var $handler = (function () {
 
@@ -606,15 +555,13 @@ var $handler = (function () {
     var elem = checkClickedElement(e.target);
     if (!elem) { return; }
     if (e.which === 2) {
-      closeTab(parseInt(elem.dataset.id));
+      $list.remove(elem.dataset.id);
       e.preventDefault();
     } else if (e.which === 1) {
-      setActive(getTabIndex(elem.dataset.id));
-      openActiveTab(); 
+      $list.open(elem.dataset.id);
     }
   };
 });
-
 
 // Update routine
 function update() {
@@ -622,6 +569,14 @@ function update() {
     _prevInputValue = $input.value;
     refreshInputMatching(_prevInputValue);
   }
+}
+
+function setInfo(bgInfo) {
+  $ez.setMap(bgInfo.map);
+  $state.setWindowId(bgInfo.currentTab.windowId);
+  _list = bgInfo.tabs;
+  _list.forEach(createButtonHTML);
+  showTabs(initialTabsSort);
 }
 
 // Start it all !
@@ -638,6 +593,8 @@ function init() {
 
   // Init handlers
   $handler();
+
+  $input.focus();
 }
 
 
