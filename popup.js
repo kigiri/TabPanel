@@ -522,6 +522,10 @@ Tab = (function () {
 
     // Populate children content
     this.update();
+
+    if (this.windowId === $state.getWindowId()) {
+      this.css.add('current');
+    }
   }
 
   Tab.prototype = Object.create(Elem.prototype);
@@ -578,13 +582,6 @@ Tab = (function () {
     return this;
   };
 
-  Tab.prototype.updateCurrent = function () {
-    if (this.windowId === $state.getWindowId()) {
-      this.css.add('current');
-    }
-    return this;
-  };
-
   Tab.prototype.compare = function (tab) {
     if (this.openInfo.time || tab.openInfo.time) {
       if (this.openInfo.fresh) {
@@ -617,8 +614,10 @@ Tab = (function () {
       windowId: windowId
     }, function () {
       this.unselect();
-      this.windowId = $state.getWindowId();
-      this.css.add('current');
+      this.windowId = windowId;
+      if (windowId === $state.getWindowId()) {
+        this.css.add('current');
+      }
       $state.setSelectingState(false);
     });
     return this;
@@ -708,7 +707,9 @@ List = (function () {
     while (++i < len) {
       _list.appendChild(_elemArray[i].buttonHTML);
     }
-    chrome.runtime.sendMessage({ type: 'loadFavIcons' }, function (newFavIcons) {
+    chrome.runtime.sendMessage({
+      type: 'loadFavIcons'
+    }, function (newFavIcons) {
       Tab.prototype.setFavIcon(newFavIcons);
       forEach('generateFavIcon');
     });
