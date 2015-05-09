@@ -559,7 +559,6 @@ Tab = (function () {
     this.favIcon = true;
 
     var iconData, img, favIcon = document.createElement('div');
-
     favIcon.className = 'fav-icon';
     iconData = (typeof this.favIconUrl === 'number')
              ? this.url
@@ -684,10 +683,7 @@ List = (function () {
   function forEach(key) {
     var i = -1, len = _elemArray.length, fn;
     while (++i < len) {
-      fn = _elemArray[i][key];
-      if (typeof fn === 'function') {
-        fn();
-      }
+      _elemArray[i][key]();
     }
   }
 
@@ -696,10 +692,7 @@ List = (function () {
     while (++i < len) {
       val = _elemArray[i];
       if (val[test] === value) {
-        fn = val[key];
-        if (typeof fn === 'function') {
-          fn();
-        }
+        val[key]();
       }
     }
   }
@@ -717,8 +710,8 @@ List = (function () {
     }
     chrome.runtime.sendMessage({ type: 'loadFavIcons' }, function (newFavIcons) {
       Tab.prototype.setFavIcon(newFavIcons);
-      this.forEachSelected('generateFavIcon');
-    }.bind(this));
+      forEach('generateFavIcon');
+    });
     setActive(0);
   };
 
