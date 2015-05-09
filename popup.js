@@ -328,7 +328,7 @@ $state = (function () {
         },
         match: {
           caseInsensitive: false,
-          renderResultToHtml: false,
+          renderResultToHtml: true,
           normalized: true
         }
       };
@@ -536,9 +536,9 @@ Tab = (function () {
       this.span.innerHTML = '<i>'+ this.hostname.str
                           +'</i>'+ this.pathname.str;
     } else {
-      this.h3.innerHTML = this.title.HTML;
-      this.span.innerHTML = '<i>'+ this.hostname.HTML
-                          +'</i>'+ this.pathname.HTML;
+      this.h3.innerHTML = this.title.result;
+      this.span.innerHTML = '<i>'+ this.hostname.result
+                          +'</i>'+ this.pathname.result;
     }
   };
 
@@ -764,6 +764,7 @@ List = (function () {
   List.prototype.update = function (pattern) {
     if ($search.isEmpty()) {
       $search.valid();
+      forEach('setFullMatch');
       return this.sort().refresh().render();
     }
 
@@ -773,6 +774,7 @@ List = (function () {
     while (++i < len) {
       var elem = _elemArray[i];
       elem.match(pattern);
+      elem.update();
       if (!elem.partial) {
         noMatch = false;
       }
@@ -781,8 +783,8 @@ List = (function () {
       // set class no match on input
       $search.invalid();
     } else {
-      this.sort('byScore');
-      $search.valid().refresh().render();
+      this.sort('byScore').render();
+      $search.valid();
     }
     return this;
   };
@@ -875,6 +877,7 @@ var $handlers = (function () {
   });
 
   function checkClickedElement(elem) {
+    if (!elem) { return false; }
     if (elem.tagName !== "BUTTON") {
       elem = elem.offsetParent;
       if (elem.tagName !== "BUTTON") { return false; }
