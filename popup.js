@@ -403,12 +403,12 @@ Elem = (function (){
   })();
 
   Elem.prototype.activate = (function () {
-    var _previousActive = null;
+    var _previousActive = { elemId: null };
     return function () {
       if (this.elemId === _previousActive.elemId) { return; }
 
       this.css.add('active');
-      if (_previousActive) {
+      if (_previousActive.elemId !== null) {
         _previousActive.css.remove('active');
       }
       _previousActive = this;
@@ -466,7 +466,7 @@ Tab = (function () {
   var _favIcons = {},
       _wantedKeys = [
       'windowId',
-      'open',
+      'openInfo',
       'url',
       'title',
       'favIconUrl',
@@ -570,12 +570,12 @@ Tab = (function () {
   };
 
   Tab.prototype.compare = function (tab) {
-    if (this.open.time || b.open.time) {
-      if (this.open.fresh) {
-        if (b.open.fresh) { return this.open.time - b.open.time; }
+    if (this.openInfo.time || b.openInfo.time) {
+      if (this.openInfo.fresh) {
+        if (b.openInfo.fresh) { return this.openInfo.time - b.openInfo.time; }
         return -1;
-      } else if (b.open.fresh) { return 1; }
-      return b.open.time - this.open.time;
+      } else if (b.openInfo.fresh) { return 1; }
+      return b.openInfo.time - this.openInfo.time;
     }
     if (this.windowId !== b.windowId) {
       if (this.windowId === $state.getWindowId()) { return -1; }
@@ -636,7 +636,7 @@ Tab = (function () {
 
 List = (function () {
   var _value = [],
-      _list = document.getElementById("list"),
+      _list = document.getElementById('list'),
       _active = -1;
 
   // Scroll to element if necessary
@@ -703,8 +703,10 @@ List = (function () {
 
   var List = function (tabArray) {
     var i = -1, len = tabArray.length;
+    _value = Array(len);
     while (++i < len) {
-      _list.appendChild(new Tab(tabArray[i]));
+      _value[i] = new Tab(tabArray[i]);
+      _list.appendChild(_value[i].buttonHTML);
     }
     setActive(0);
     chrome.runtime.sendMessage({ type: 'loadFavIcons' }, function (newFavIcons) {

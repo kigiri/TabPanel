@@ -152,7 +152,7 @@ var TabList = (function () {
   var TabList = {};
 
   function formatTab(tab) {
-    tab.open = TabInfo.getOpenInfo(tab.id);
+    tab.openInfo = TabInfo.getOpenInfo(tab.id);
     tab.favIconUrl = updateFavIcon(tab);
   }
 
