@@ -17,7 +17,20 @@ var $ez = (function () {
   return {
     normalize: normalize,
     emptyFallback: function () {},
-    toTabIdArray: function (tab) { return tab.id; }
+    toTabIdArray: function (tab) { return tab.id; },
+    getEventKey: function (event) {
+      var eventKey = event.keyCode;
+      if (event.metaKey) {
+        eventKey += '-meta';
+      } else if (event.altKey) {
+        eventKey += '-alt';
+      } else if (event.shiftKey) {
+        eventKey += '-shift';
+      } else if (event.ctrlKey) {
+        eventKey += '-ctrl';
+      }
+      return eventKey;
+    }
   };
 });
 
@@ -386,11 +399,11 @@ var $list = (function () {
       _list.appendChild(new Tab(tabArray[i]));
     }
     setActive(0);
+    chrome.runtime.sendMessage({ type: 'loadFavIcons' }, function (newFavIcons) {
+      Tab.prototype.setFavIcon(newFavIcons);
+      this.forEachSelected('generateFavIcon');
+    }.bind(this));
   };
-
-  List.prototype.show = function () {
-    
-  }
 
   List.prototype.selectMatched = function () {
     if (!$input.value) { return; }
@@ -516,24 +529,14 @@ var $list = (function () {
 var $handler = (function () {
 
   // Subscribe to DOM events
-  $input.onkeydown = function (e) {
-    var fn = $list[e.keyCode];
+  $input.onkeydown = function (event) {
+    var fn = $list[event.keyCode];
     if (typeof fn === 'function') {
-      fn(e);
+      fn(event);
     }
     if ($state.isSelecting()) {
-      e.preventDefault();
-      var eventKey = e.keyCode
-      if (e.metaKey) {
-        eventKey += '-meta';
-      } else if (e.altKey) {
-        eventKey += '-alt';
-      } else if (e.shiftKey) {
-        eventKey += '-shift';
-      } else if (e.ctrlKey) {
-        eventKey += '-ctrl';
-      }
-      $list.actionOnSelected(eventKey);
+      $list.actionOnSelected($ez.getEventKey(event));
+      event.preventDefault();
     }
   };
 
