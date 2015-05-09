@@ -1,7 +1,4 @@
 ﻿// Shorthands
-var $elem = document.all;
-var $input = $elem.search;
-
 var $ez = (function () {
   function normalize(_normalizeMap) {
     normalize = function (str) {
@@ -37,9 +34,9 @@ var $ez = (function () {
 
 // State shared globals
 var $state = (function () {
-  var _isSelecting = false;
-  var _currentWindowId = 0;
-  var _opts = {
+  var _isSelecting = false,
+      _currentWindowId = 0,
+      _opts = {
     // TODO: load and store opts
     // Hide private navigation tabs form the results
     hideIncognito: true
@@ -59,16 +56,15 @@ var $state = (function () {
     setSelectingState: function (selectState) {
       if (selectState !== _isSelecting) {
         if (selectState) {
-          $input.classList.add('disabled');
+          $search.input.classList.add('disabled');
         } else {
-          $input.classList.remove('disabled');
+          $search.input.classList.remove('disabled');
         }
         _isSelecting = selectState;
       }
     }
   };
 })();
-
 
 var Elem = (function (){
   var Elem = (function () {
@@ -288,7 +284,7 @@ var Tab = (function () {
       });
       setSelectingState(false);
       refreshInputMatching();
-      $input.select();
+      $search.input.select();
     });
     return this;
   };
@@ -316,19 +312,27 @@ var Tab = (function () {
 })();
 
 var $search = (function () {
-  var _prevInputValue = '';
+  var _prevInputValue = '',
+      _input = document.getElementById("search");
 
   return {
     isEmpty: function () {
       return !_prevInputValue;
+    },
+    input: _input,
+    update: function () {
+      if (_prevInputValue !== $search.input.value) {
+        _prevInputValue = $search.input.value;
+        refreshInputMatching(_prevInputValue);
+      }
     }
   };
 })();
 
-// require $state, $input
+// require $state, $search.input
 var $list = (function () {
   var _value = [],
-      _list = $elem.list,
+      _list = document.getElementById("list"),
       _active = -1;
 
   // Scroll to element if necessary
@@ -406,7 +410,7 @@ var $list = (function () {
   };
 
   List.prototype.selectMatched = function () {
-    if (!$input.value) { return; }
+    if (!$search.input.value) { return; }
     forEachTest('select', 'partial', false);
   };
 
@@ -423,7 +427,7 @@ var $list = (function () {
 
   List.prototype.refresh = function (key) {
     if ($search.isEmpty()) {
-      $input.classList.remove('invalid');
+      $search.input.classList.remove('invalid');
       return showTabs(initialTabsSort);
     }
 
@@ -440,10 +444,10 @@ var $list = (function () {
     }
     if (noMatch) {
       // set class no match on input
-      $input.classList.add('invalid');
+      $search.input.classList.add('invalid');
     } else {
       showTabs(scoreTabsSort);
-      $input.classList.remove('invalid');
+      $search.input.classList.remove('invalid');
     }
   };
 
@@ -529,7 +533,7 @@ var $list = (function () {
 var $handler = (function () {
 
   // Subscribe to DOM events
-  $input.onkeydown = function (event) {
+  $search.input.onkeydown = function (event) {
     var fn = $list[event.keyCode];
     if (typeof fn === 'function') {
       fn(event);
@@ -566,14 +570,6 @@ var $handler = (function () {
   };
 });
 
-// Update routine
-function update() {
-  if (_prevInputValue !== $input.value) {
-    _prevInputValue = $input.value;
-    refreshInputMatching(_prevInputValue);
-  }
-}
-
 function setInfo(bgInfo) {
   $ez.setMap(bgInfo.map);
   $state.setWindowId(bgInfo.currentTab.windowId);
@@ -592,12 +588,12 @@ function init() {
   chrome.runtime.sendMessage({type: 'loadPopup'});
 
   // Start the update
-  setInterval(update, 35);
+  setInterval($search.update, 35);
 
   // Init handlers
   $handler();
 
-  $input.focus();
+  $search.input.focus();
 }
 
 
