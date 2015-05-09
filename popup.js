@@ -47,6 +47,7 @@ var $state = (function () {
       };
 
   return {
+    opts: _opts,
     matchType: 'fuzzy',
     isSelecting: function () {
       return _isSelecting;
@@ -88,6 +89,7 @@ var Elem = (function (){
         button.appendChild(children[i]);
       }
 
+      this.type = type;
       this.buttonHTML = button;
       this.css = button.classList;
       this.elemId = elemId++;
@@ -505,7 +507,10 @@ var $list = (function () {
     $list.toggleActiveSelection();
   };
 
-  List.prototype[13] = openActiveTab,  // Key Enter
+  List.prototype[13] = function (e) {  // Key Enter
+    _value[_active].open();
+  };
+
   List.prototype[27] = function (e) {  // Key esc
     if ($state.isSelecting()) {  
       _value.forEach(function (tab) {
