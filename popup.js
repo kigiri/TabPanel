@@ -407,7 +407,7 @@ Elem = (function (){
         id: elemId
       };
 
-      while (++i < length) {
+      while (++i < len) {
         button.appendChild(children[i]);
       }
 
@@ -422,7 +422,6 @@ Elem = (function (){
     var _previousActive = { elemId: null };
     return function () {
       if (this.elemId === _previousActive.elemId) { return; }
-
       this.css.add('active');
       if (_previousActive.elemId !== null) {
         _previousActive.css.remove('active');
@@ -555,11 +554,9 @@ Tab = (function () {
     if (this.favIcon) { return; }
     this.favIcon = true;
 
-    var iconData, img,
-        favIcon = document.createElement('div');
+    var iconData, img, favIcon = document.createElement('div');
 
     favIcon.className = 'fav-icon';
-
     iconData = (typeof this.favIconUrl === 'number')
              ? this.url
              : _favIcons[this.favIconUrl].data;
@@ -708,13 +705,17 @@ List = (function () {
     _elemArray = Array(len);
     while (++i < len) {
       _elemArray[i] = new Tab(tabArray[i]);
+    }
+    this.sort();
+    i = -1;
+    while (++i < len) {
       _list.appendChild(_elemArray[i].buttonHTML);
     }
-    setActive(0);
     chrome.runtime.sendMessage({ type: 'loadFavIcons' }, function (newFavIcons) {
       Tab.prototype.setFavIcon(newFavIcons);
       this.forEachSelected('generateFavIcon');
     }.bind(this));
+    setActive(0);
   };
 
   List.prototype.selectMatched = function () {
@@ -741,7 +742,7 @@ List = (function () {
       elem = _elemArray[i];
       btn = buttons[i];
       if (elem.elemId !== btn.dataset.id) {
-        _list.insertBefore(elem, btn);
+        _list.insertBefore(elem.buttonHTML, btn);
       }
     }
     return this;
@@ -767,15 +768,16 @@ List = (function () {
       // set class no match on input
       $search.invalid();
     } else {
-      showTabs(scoreTabsSort);
+      this.sort('byScore');
       $search.valid();
     }
     return this;
   };
 
-  List.prototype.sort = function () {
+  List.prototype.sort = function (sortMethod) {
+    sortMethod = (sortMethod || 'compare');
     _elemArray.sort(function (a, b) {
-      return a.compare(b);
+      return a[sortMethod](b);
     })
     return this;
   };
