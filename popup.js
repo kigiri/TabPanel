@@ -1,4 +1,4 @@
-﻿var $ez, $list, $state, $search, $handlers, $match,
+﻿var $ez, $list, $state, $search, $match,
     Elem, Tab, List, Match;
 
 $ez = (function () {
@@ -356,9 +356,10 @@ $state = (function () {
 
 $search = (function () {
   var _prevInputValue = '',
+      _list,
       _input = document.getElementById("search");
 
-  return {
+  var Search = {
     isEmpty: function () {
       return !_prevInputValue;
     },
@@ -369,33 +370,69 @@ $search = (function () {
       var pattern = _input.value
       if (_prevInputValue !== pattern) {
         _prevInputValue = pattern;
-        $list.update(pattern);
+        _list.update(pattern);
       }
+      return Search;
     },
     valid: function () {
       _input.classList.remove('invalid');
+      return Search;
     },
     invalid: function () {
       _input.classList.add('invalid');
+      return Search;
     },
     enable: function () {
-      _input.classList.remove('disable');
+      _input.classList.remove('disabled');
+      return Search;
     },
     disable: function () {
-      _input.classList.add('disable');
+      _input.classList.add('disabled');
+      return Search;
     },
     focus: function () {
       _input.focus();
+      return Search;
     },
-    onkeydown: function (eventHandler) {
-      _input.onkeydown = eventHandler;
+    init: function (list) {
+      if (!(list instanceof List)) {
+        console.error('list argument isn\'t a List instance');
+        return null;
+      }
+      _list = list;
+      console.log(_input);
+      // Listen to DOM events
+      _input.onkeydown = function (event) {
+        if (_list[event.keyCode] instanceof Function) {
+          _list[event.keyCode](event);
+        } else if ($state.isSelecting()) {
+          _list.forEachSelected($ez.getEventKey(event));
+          event.preventDefault();
+        }
+      };
+      return Search;
     }
   };
+  return Search;
 })();
 
 Elem = (function (){
   var Elem = (function () {
     var elemId = 0;
+
+    function onmousedown(event) {
+      return (event.which !== 2);
+    };
+
+    function onmouseup(event) {
+      if (event.which === 2) {
+        this.close();
+        event.preventDefault();
+      } else if (event.which === 1) {
+        this.open();
+      }
+    };
+
     return function (type, children) {
       var i = -1,
           len = children.length,
@@ -411,10 +448,15 @@ Elem = (function (){
         button.appendChild(children[i]);
       }
 
+      button.onmousedown = onmousedown.bind(this);
+      button.onmouseup = onmouseup.bind(this);
+
       this.type = type;
       this.buttonHTML = button;
       this.css = button.classList;
       this.elemId = elemId++;
+      this.score = 0;
+      this.partial = false;
     };
   })();
 
@@ -568,14 +610,13 @@ Tab = (function () {
              ? this.url
              : _favIcons[this.favIconUrl].data;
 
-    if (typeof iconData === 'string') {
+    if (typeof iconData === 'string' && iconData[0] !== '#') {
       img = document.createElement('img');
-
       img.src = iconData;
       img.onError = handleFavIconLoadfailure.bind(this);
       favIcon.appendChild(img);
     } else {
-      favIcon.classList.add('not-found');
+      this.css.add('not-found');
     }
     this.favIconDiv = favIcon;
     this.buttonHTML.appendChild(favIcon);
@@ -602,13 +643,15 @@ Tab = (function () {
   Tab.prototype.open = function () {
     chrome.tabs.update(this.id, { 'active': true });
     if (this.windowId !== $state.getWindowId()) {
-      chrome.windows.update(this.windowId, { 'focused': true });
+      chrome.windows.update(this.windowId, { 'focused': true }, function () {
+        window.close();
+      });
     }
-    // TODO: May want to call window.close(); after this method...
     return this;
   };
 
   Tab.prototype.move = function (windowId) {
+    console.log('move', this, 'to', windowId);
     chrome.tabs.move(this.id, {
       index: -1,
       windowId: windowId
@@ -619,7 +662,7 @@ Tab = (function () {
         this.css.add('current');
       }
       $state.setSelectingState(false);
-    });
+    }.bind(this));
     return this;
   };
 
@@ -635,7 +678,7 @@ Tab = (function () {
 
   // KeyCode handlers
   Tab.prototype[$state.opts.key.move] = function () {  // key M
-    this.move(windowId);
+    this.move($state.getWindowId());
   };
 
   Tab.prototype[$state.opts.key.close] = function () {  // Key W
@@ -680,17 +723,19 @@ List = (function () {
   }
 
   function forEach(key) {
-    var i = -1, len = _elemArray.length, fn;
+    var i = -1, len = _elemArray.length;
     while (++i < len) {
-      _elemArray[i][key]();
+      if (_elemArray[i][key] instanceof Function) {
+        _elemArray[i][key]();
+      }
     }
   }
 
   function forEachTest(key, test, value) {
-    var i = -1, len = _elemArray.length, val, fn;
+    var i = -1, len = _elemArray.length, val;
     while (++i < len) {
       val = _elemArray[i];
-      if (val[test] === value) {
+      if (val[test] === value && val[key] instanceof Function) {
         val[key]();
       }
     }
@@ -717,8 +762,11 @@ List = (function () {
   };
 
   List.prototype.selectMatched = function () {
-    if ($search.isEmpty()) { return; }
-    forEachTest('select', 'partial', false);
+    if ($search.isEmpty()) {
+      forEach('select');
+    } else {
+      forEachTest('select', 'partial', false);
+    }
     return this;
   };
 
@@ -740,7 +788,6 @@ List = (function () {
     } else {
       activeElem.select();
     }
-    $state.setSelectingState(this.hasSelectedElement());
     return this;
   };
 
@@ -820,6 +867,7 @@ List = (function () {
   };
 
   List.prototype.forEachSelected = function (key) {
+    console.log('forEachSelected: key =', key);
     forEachTest(key, 'selected', true);
     return this;
   };
@@ -827,7 +875,8 @@ List = (function () {
   List.prototype[$state.opts.key.select] = function (event) {
     if (_active === -1) { return; }
     event.preventDefault();
-    $list.toggleActiveSelection();
+    this.toggleActiveSelection();
+    $state.setSelectingState(this.hasSelectedElement());
   };
 
   List.prototype[$state.opts.key.enter] = function (event) {
@@ -836,10 +885,9 @@ List = (function () {
 
   List.prototype[$state.opts.key.cancel] = function (event) {
     if ($state.isSelecting()) {  
-      _elemArray.forEach(function (tab) {
-        tab.unselect();
-      });
+      forEach('unselect');
       $state.setSelectingState(false);
+      event.preventDefault();
     }
   };
 
@@ -855,58 +903,19 @@ List = (function () {
 
   List.prototype[$state.opts.key.all] = function (event) {
     if ($state.isSelecting()) {
-      $list.selectMatched();
+      this.selectMatched();
+      event.preventDefault();
     }
   };
 
   return List;
 })();
 
-var $handlers = (function () {
-
-  // Subscribe to DOM events
-  $search.onkeydown(function (event) {
-    var fn = $list[event.keyCode];
-    if (typeof fn === 'function') {
-      fn(event);
-    }
-    if ($state.isSelecting()) {
-      $list.forEachSelected($ez.getEventKey(event));
-      event.preventDefault();
-    }
-  });
-
-  function checkClickedElement(elem) {
-    if (!elem) { return false; }
-    if (elem.tagName !== "BUTTON") {
-      elem = elem.offsetParent;
-      if (elem.tagName !== "BUTTON") { return false; }
-    }
-    return elem;
-  }
-
-  document.body.onmousedown = function (event) {
-    if (checkClickedElement(event.target) && event.which === 2) {
-      return false;
-    }
-  };
-
-  document.body.onmouseup = function (event) {
-    var elem = checkClickedElement(event.target);
-    if (!elem) { return; }
-    if (event.which === 2) {
-      $list.remove(elem.dataset.id);
-      event.preventDefault();
-    } else if (event.which === 1) {
-      $list.open(elem.dataset.id);
-    }
-  };
-});
-
 function setInfo(bgInfo) {
   $state.setWindowId(bgInfo.currentTab.windowId);
   $match = Match($state.opts.match);
   $list = new List(bgInfo.tabs);
+  $search.init($list).focus();
   $list.update();
 }
 
@@ -921,11 +930,6 @@ function init() {
 
   // Start the update
   setInterval($search.update, 35);
-
-  // Init handlers
-  $handlers();
-
-  $search.focus();
 }
 
 init();
