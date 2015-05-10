@@ -760,9 +760,25 @@ List = (function () {
     }
   }
 
-  function setActive(idx) {
-    _active = Math.min(Math.max(0, idx), _elemArray.length - 1);
-    scrollTo(_elemArray[_active].activate().buttonHTML);
+  function activeNext() {
+    var len = _elemArray.length - 1;
+    while (_active < len) {
+      _active++;
+      if (!_elemArray[_active].hidden) {
+        scrollTo(_elemArray[_active].activate().buttonHTML);
+        return;
+      }
+    }
+  }
+
+  function activePrevious() {
+    while (_active > 1) {
+      _active--;
+      if (!_elemArray[_active].hidden) {
+        scrollTo(_elemArray[_active].activate().buttonHTML);
+        return;
+      }
+    }
   }
 
   function getIndex(value) {
@@ -945,12 +961,12 @@ List = (function () {
   };
 
   List.prototype[$state.opts.key.up] = function (event) {
-    setActive(_active - 1);
+    activePrevious();
     event.preventDefault();
   };
 
   List.prototype[$state.opts.key.down] = function (event) {
-    setActive(_active + 1);
+    activeNext();
     event.preventDefault();
   };
 
