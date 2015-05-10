@@ -827,7 +827,8 @@ List = (function () {
       Tab.prototype.setFavIcon(newFavIcons);
       forEach('generateFavIcon');
     });
-    setActive(0);
+    _active = 0;
+    _elemArray[0].activate();
   };
 
   List.prototype.selectMatched = function () {
