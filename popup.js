@@ -1,5 +1,5 @@
 ﻿var $ez, $list, $state, $search, $match,
-    Elem, Tab, List, Match;
+    Elem, Tab, Setting, Pagelink, Command, List, Match;
 
 $ez = (function () {
   return {
@@ -400,8 +400,6 @@ $search = (function () {
         return null;
       }
       _list = list;
-      console.log(_input);
-      // Listen to DOM events
       _input.onkeydown = function (event) {
         if (_list[event.keyCode] instanceof Function) {
           _list[event.keyCode](event);
@@ -521,6 +519,39 @@ Elem = (function (){
   };
 
   return Elem;
+})();
+
+Command = (function () {
+  function Command() {
+
+    Elem.call(this, 'command', []);
+  }
+
+  Command.prototype = Object.create(Elem.prototype);
+
+  return Command;
+})();
+
+Pagelink = (function () {
+  function Pagelink() {
+
+    Elem.call(this, 'pagelink', []);
+  }
+
+  Pagelink.prototype = Object.create(Elem.prototype);
+
+  return Pagelink;
+})();
+
+Setting = (function () {
+  function Setting() {
+
+    Elem.call(this, 'setting', []);
+  }
+
+  Setting.prototype = Object.create(Elem.prototype);
+
+  return Setting;
 })();
 
 Tab = (function () {
