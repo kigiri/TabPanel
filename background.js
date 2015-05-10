@@ -2,7 +2,7 @@
  * Globals
  ******************************************************************************/
 
-var _currentTab = {};
+var _currentTab = { id: -1, windowId: -1 };
 var _switcher = null;
 var _opts = {
   disableBackward: false,
@@ -160,9 +160,9 @@ var TabList = (function () {
   TabList.export = function (callback) {
     if (wrongType(callback, 'function')) { return; }
     chrome.tabs.query({}, function (tabArray) {
-      var returnArray = [];
-      for (var i = 0; i < tabArray.length; i++) {
-        var tab = tabArray[i];
+      var returnArray = [], i, tab, len = tabArray.length;
+      for (i = 0; i < len; i++) {
+        tab = tabArray[i];
         if (tab.id !== _currentTab.id) {
           formatTab(tab);
           returnArray.push(tab);
@@ -276,7 +276,15 @@ chrome.windows.onFocusChanged.addListener(function () {
 });
 
 chrome.tabs.onActivated.addListener(function (info) {
-  TabInfo.watch(info.tabId, info.windowId);
+  chrome.windows.get(info.windowId, function (window) {
+    if (chrome.runtime.lastError) {
+      // sometimes the window isn't found, not sure why but we don't want
+      // to save it in that case.
+      console.warn(chrome.runtime.lastError.message);
+    } else {
+      TabInfo.watch(info.tabId, info.windowId);
+    }
+  });  
 });
 
 
@@ -296,7 +304,8 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tabObject) {
  ******************************************************************************/
 
 chrome.tabs.query({ 'currentWindow': true, 'active': true }, function (tabs) {
-  _currentTab = tabs[0];
+  _currentTab.id = tabs[0].id;
+  _currentTab.windowId = tabs[0].windowId;
 });
 
 /*******************************************************************************
