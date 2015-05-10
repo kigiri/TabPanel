@@ -415,6 +415,10 @@ $search = (function () {
 })();
 
 Elem = (function (){
+  function warnHidden(key, elem) {
+    console.warn('Tryed method', key, 'on elem-'+ elem.type +'-'+ elem.elemId);
+    return elem;
+  }
   var Elem = (function () {
     var elemId = 0;
 
@@ -455,10 +459,12 @@ Elem = (function (){
       this.elemId = elemId++;
       this.score = 0;
       this.partial = false;
+      this.hidden = false;
     };
   })();
 
   Elem.prototype.activate = (function () {
+    if (this.hidden) { return warnHidden('activate', this); }
     var _previousActive = { elemId: null };
     return function () {
       if (this.elemId === _previousActive.elemId) { return this; }
@@ -475,17 +481,29 @@ Elem = (function (){
   Elem.prototype.match = function () { };
 
   Elem.prototype.compare = function (elem) {
+    if (this.hidden) { return 1; }
     return this.elemId - elem.elemId;
   };
 
   Elem.prototype.byScore = function (elem) {
+    if (this.hidden) { return 1; }
     if (elem.partial && !this.partial) { return -1; }
     if (this.partial && !elem.partial) { return  1; }
     if (elem.score !== this.score) { return elem.score - this.score; }
     return this.compare(elem);
   }
 
+  Elem.prototype.show = function (type) {
+    if (this.type === type) {
+      this.css.remove('hide');
+      this.hidden = false;
+    }
+    this.css.add('hide');
+    this.hidden = true;
+  };
+
   Elem.prototype.update = function () {
+    if (this.hidden) { return warnHidden('update', this); }
     if ($search.isEmpty()) {
       this.setCssFull();
     }
@@ -493,6 +511,7 @@ Elem = (function (){
   };
 
   Elem.prototype.setPartialMatch = function () {
+    if (this.hidden) { return warnHidden('setPartialMatch', this); }
     this.css.remove('match-full');
     this.css.add('match-partial');
     this.partial = true;
@@ -500,6 +519,7 @@ Elem = (function (){
   };
 
   Elem.prototype.setFullMatch = function () {
+    if (this.hidden) { return warnHidden('setFullMatch', this); }
     this.css.remove('match-partial');
     this.css.add('match-full');
     this.partial = false;
@@ -507,12 +527,14 @@ Elem = (function (){
   };
 
   Elem.prototype.select = function () {
+    if (this.hidden) { return warnHidden('select', this); }
     this.selected = true;
     this.css.add('selected');
     return this;
   };
 
   Elem.prototype.unselect = function () {
+    if (this.hidden) { return warnHidden('unselect', this); }
     this.selected = false;
     this.css.remove('selected');
     return this;
