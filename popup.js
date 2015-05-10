@@ -140,13 +140,15 @@ Match = (function (opts) {
   }
 
   function fuzzy(str, pattern, s, p, score, bonus, matched, deepness) {
+  function fuzzy(str, pattern, s, p, score, bonus, matched, deepness, last) {
     // End of the pattern, successfull match
     if (p >= pattern.length) {
       return makeMatchObject(score + (s >= str.length), matched, false);
     }
 
     // End of the string, failed to match all the pattern, apply penalty to score
-    if (s >= str.length) {
+    var len = str.length;
+    if (s >= len) {
       return makeMatchObject(score, matched, true);
     }
 
@@ -156,19 +158,20 @@ Match = (function (opts) {
       // Look a head to find best possible match
       var altMatch;
       if (deepness > 0) {
-        altMatch = fuzzy(str, pattern, s+1, p, score, 0, matched.slice(), deepness - 1);
+        altMatch = fuzzy(str, pattern, s+1, p, score, 0, matched.slice(), deepness - 1, last);
       }
 
       // Store current match and calculate bonus
       matched.push(s);
 
       // Bonus for capitals
-      if (c !== lowerC) {
-        score += 3;
+      if (s <= 0) {
+        score += ((len - s - last) / len) * (c === lowerC ? 1 : 4) + bonus;
+      } else {
+        score += (c === lowerC ? 1 : 4) + bonus;
       }
-      score += 1 + bonus;
       bonus += 5;
-      var match = fuzzy(str, pattern, s+1, p+1, score, bonus, matched, deepness);
+      var match = fuzzy(str, pattern, s+1, p+1, score, bonus, matched, deepness, s);
       // Return the best score
       return (!altMatch || altMatch.score <= match.score) ? match : altMatch;
     } else {
@@ -177,7 +180,7 @@ Match = (function (opts) {
 
       // If nothing matched, recalculate bonus
       bonus = (c === '*' || c === ' ') ? 3 : 0;
-      return fuzzy(str, pattern, s+1, p, score, bonus, matched, deepness);
+      return fuzzy(str, pattern, s+1, p, score, bonus, matched, deepness, last);
     }
   }
 
@@ -290,7 +293,7 @@ Match = (function (opts) {
     },
 
     fuzzy: function (block, pattern) {
-      var bestMatch = fuzzy(block.normalized, pattern, 0, 0, 0, 8, [], 6);
+      var bestMatch = fuzzy(block.normalized, pattern, 0, 0, 0, 8, [], 6, -1);
       block.score = bestMatch.score; // += ?
       block.result = renderIndexArray(bestMatch.matched, block.str);
       return bestMatch.partial ? 0 : 1;
@@ -427,11 +430,12 @@ Elem = (function (){
     };
 
     function onmouseup(event) {
-      if (event.which === 2) {
-        this.close();
-        event.preventDefault();
+      if (event.which === 3) {
+        this.rightClick(event);
+      } else if (event.which === 2) {
+        this.middleClick(event);
       } else if (event.which === 1) {
-        this.open();
+        this.leftClick(event);
       }
     };
 
@@ -479,6 +483,9 @@ Elem = (function (){
 
   // Should be implemented by specific Elems
   Elem.prototype.match = function () { };
+  Elem.prototype.leftClick = function () { };
+  Elem.prototype.middleClick = function () { };
+  Elem.prototype.rightClick = function () { };
 
   Elem.prototype.compare = function (elem) {
     if (this.hidden) { return 1; }
@@ -505,7 +512,7 @@ Elem = (function (){
   Elem.prototype.update = function () {
     if (this.hidden) { return warnHidden('update', this); }
     if ($search.isEmpty()) {
-      this.setCssFull();
+      this.setFullMatch();
     }
     return this;
   };
@@ -625,6 +632,15 @@ Tab = (function () {
 
   Tab.prototype = Object.create(Elem.prototype);
 
+  Tab.prototype.leftClick = function (event) {
+    this.open();
+  };
+
+  Tab.prototype.middleClick = function (event) {
+    this.close();
+    event.preventDefault();
+  };
+
   Tab.prototype.update = function () {
     if ($search.isEmpty()) {
       this.h3.innerHTML = this.title.str;
@@ -677,6 +693,7 @@ Tab = (function () {
   };
 
   Tab.prototype.compare = function (tab) {
+    if (this.type !== tab.type) { return 0; }
     if (this.openInfo.time || tab.openInfo.time) {
       if (this.openInfo.fresh) {
         if (tab.openInfo.fresh) { return this.openInfo.time - tab.openInfo.time; }
@@ -810,11 +827,12 @@ List = (function () {
     }
   }
 
-  var List = function (tabArray) {
-    var i = -1, len = tabArray.length;
+  var List = function (contentArray) {
+    var i = -1, len = contentArray.length, elem;
     _elemArray = Array(len);
     while (++i < len) {
-      _elemArray[i] = new Tab(tabArray[i]);
+      elem = contentArray[i];
+      _elemArray[i] = new elem.type(elem.data);
     }
     this.sort();
     i = -1;
@@ -829,6 +847,7 @@ List = (function () {
     });
     _active = 0;
     _elemArray[0].activate();
+    this.show('tab');
   };
 
   List.prototype.selectMatched = function () {
@@ -846,6 +865,14 @@ List = (function () {
       if (_elemArray[i].selected) {
         return true;
       }
+    }
+    return false;
+  }
+
+  List.prototype.show = function (type) {
+    var i = -1; len = _elemArray.length;
+    while (++i < len) {
+      _elemArray[i].show(type);
     }
     return false;
   }
@@ -984,7 +1011,9 @@ List = (function () {
 function setInfo(bgInfo) {
   $state.setWindowId(bgInfo.currentTab.windowId);
   $match = Match($state.opts.match);
-  $list = new List(bgInfo.tabs);
+  $list = new List(bgInfo.tabs.map(function (tab) {
+    return { type: Tab, data: tab };
+  }));
   $search.init($list).focus();
   $list.update();
 }
