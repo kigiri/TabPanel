@@ -20,6 +20,12 @@ $ez = (function () {
     setTabId: function (tabId) {
       _tabId = tabId;
     },
+    getTimeSinceInit: (function () {
+      var _initTime = Date.now();
+      return function () {
+        return Date.now() - _initTime;
+      };
+    })(),
     emptyFallback: function () {},
     toTabIdArray: function (tab) { return tab.id; },
     setBadge: setBadge,
@@ -433,6 +439,10 @@ $search = (function () {
       _input.focus();
       return Search;
     },
+    select: function () {
+      _input.select();
+      return Search;
+    },
     init: function (list, lastPattern) {
       if (!(list instanceof List)) {
         console.error('list argument isn\'t a List instance');
@@ -448,7 +458,6 @@ $search = (function () {
         }
       };
       _input.value = lastPattern;
-      _input.select();
       return Search;
     }
   };
@@ -933,17 +942,23 @@ List = (function () {
       _active = -1;
 
   // Scroll to element if necessary
+  // for some reason this function is very very expensive
+  // so I prevent from calling it until 2 sec passed.
   function scrollTo(elem) {
-    var min = _list.scrollTop
-    var max = _list.clientHeight + min;
-    var offset = elem.offsetTop;
-    var height = elem.offsetHeight;
+    if ($ez.getTimeSinceInit() < 2000) { return; }
+    scrollTo = function (elem) {
+      var min = _list.scrollTop
+      var max = _list.clientHeight + min;
+      var offset = elem.offsetTop;
+      var height = elem.offsetHeight;
 
-    if ((offset + height - 4) > max) {
-      _list.scrollTop += (offset + height - 4) - max;
-    } else if (min && (offset - (height * 2) < min)) {
-      _list.scrollTop += offset - (height * 2) - min;
-    }
+      if ((offset + height - 4) > max) {
+        _list.scrollTop += (offset + height - 4) - max;
+      } else if (min && (offset - (height * 2) < min)) {
+        _list.scrollTop += offset - (height * 2) - min;
+      }
+    };
+    scrollTo(elem);
   }
 
   function activeNext() {
@@ -968,13 +983,16 @@ List = (function () {
     }
   }
 
-  function activeFirst() {
+  function activeFirst(noScroll) {
     var len = _elemArray.length;
     _active = -1;
     while (_active < len) {
       _active++;
       if (!_elemArray[_active].hidden) {
-        scrollTo(_elemArray[_active].activate().buttonHTML);
+        var elem = _elemArray[_active].activate();
+        if (scroll !== false) {
+          scrollTo(elem.buttonHTML);
+        }
         return;
       }
     }
@@ -1027,8 +1045,7 @@ List = (function () {
       Tab.prototype.setFavIcon(newFavIcons);
       forEach('generateFavIcon');
     });
-    activeFirst();
-    _elemArray[0].activate();
+    activeFirst(false);
   };
 
   List.prototype.selectMatched = function () {
@@ -1090,6 +1107,7 @@ List = (function () {
     return this.updateBadge();
   };
 
+  // call to apply sorted array to the dom
   List.prototype.render = function () {
     var i = -1, len = _elemArray.length, elem, btn, buttons = _list.childNodes;
     while (++i < len) {
@@ -1236,9 +1254,12 @@ function setInfo(bgInfo) {
   $ez.setTabId(bgInfo.currentTab.id);
   $match = Match($state.opts.match);
   $list = new List(toType(Tab, bgInfo.tabs).concat(toType(Command, $commandList)));
-  $search.init($list, bgInfo.lastPattern).focus();
-  $list.update();
-  setInterval($search.update, 35);
+  $search.init($list, bgInfo.lastPattern);
+  setTimeout(function() {
+    $search.select();
+    $list.update();
+    setInterval($search.update, 35);
+  });
 }
 
 // Start it all !
