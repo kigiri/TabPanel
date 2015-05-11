@@ -1,10 +1,34 @@
-﻿var $ez, $list, $state, $search, $match,
+﻿var $ez, $list, $state, $search, $match, $commandList,
     Elem, Tab, Setting, Pagelink, Command, List, Match;
 
 $ez = (function () {
+  var _tabId
+  var setBadge = (function () {
+    var _prevCount = -1
+    return function (count) {
+      if (_prevCount === count || _tabId === undefined) { return; }
+      _prevCount = count;
+      chrome.browserAction.setBadgeText({
+        text: (count > 99) ? "99+" : count.toString(),
+      });
+    };
+  })();
   return {
+    getTabId: function () {
+      return _tabId;
+    },
+    setTabId: function (tabId) {
+      _tabId = tabId;
+    },
     emptyFallback: function () {},
     toTabIdArray: function (tab) { return tab.id; },
+    setBadge: setBadge,
+    clearBadge: function () {
+      chrome.browserAction.setBadgeText({ text: ''});
+    },
+    capitalize: function (str) {
+      return str.slice(0, 1).toUpperCase() + str.slice(1);
+    },
     getEventKey: function (event) {
       var eventKey = event.keyCode;
       if (event.metaKey) {
@@ -139,7 +163,6 @@ Match = (function (opts) {
     };
   }
 
-  function fuzzy(str, pattern, s, p, score, bonus, matched, deepness) {
   function fuzzy(str, pattern, s, p, score, bonus, matched, deepness, last) {
     // End of the pattern, successfull match
     if (p >= pattern.length) {
@@ -333,7 +356,8 @@ $state = (function () {
           caseInsensitive: false,
           renderResultToHtml: true,
           normalized: true
-        }
+        },
+        alwaysShowBadge: false,
       };
 
   return {
@@ -363,8 +387,17 @@ $search = (function () {
       _input = document.getElementById("search");
 
   var Search = {
-    isEmpty: function () {
-      return !_prevInputValue;
+    isEmpty: function () { return !_prevInputValue; },
+    hasNoText: function () {
+      if (!_prevInputValue) {
+        return true;
+      }
+      if (_prevInputValue.length === 1) {
+        if (_prevInputValue[0] === '/') {
+          return true;
+        }
+      }
+      return false;
     },
     getPattern: function () {
       return _input.value;
@@ -393,11 +426,14 @@ $search = (function () {
       _input.classList.add('disabled');
       return Search;
     },
+    clear: function () {
+      _input.value = '';
+    },
     focus: function () {
       _input.focus();
       return Search;
     },
-    init: function (list) {
+    init: function (list, lastPattern) {
       if (!(list instanceof List)) {
         console.error('list argument isn\'t a List instance');
         return null;
@@ -411,6 +447,8 @@ $search = (function () {
           event.preventDefault();
         }
       };
+      _input.value = lastPattern;
+      _input.select();
       return Search;
     }
   };
@@ -482,10 +520,10 @@ Elem = (function (){
   })();
 
   // Should be implemented by specific Elems
-  Elem.prototype.match = function () { };
-  Elem.prototype.leftClick = function () { };
-  Elem.prototype.middleClick = function () { };
-  Elem.prototype.rightClick = function () { };
+  Elem.prototype.match = 
+  Elem.prototype.leftClick = 
+  Elem.prototype.middleClick = 
+  Elem.prototype.rightClick = function () { return this; };
 
   Elem.prototype.compare = function (elem) {
     if (this.hidden) { return 1; }
@@ -504,31 +542,32 @@ Elem = (function (){
     if (this.type === type) {
       this.css.remove('hide');
       this.hidden = false;
-    }
-    this.css.add('hide');
-    this.hidden = true;
-  };
-
-  Elem.prototype.update = function () {
-    if (this.hidden) { return warnHidden('update', this); }
-    if ($search.isEmpty()) {
-      this.setFullMatch();
+    } else {
+      this.css.add('hide');
+      this.hidden = true;
     }
     return this;
   };
 
-  Elem.prototype.setPartialMatch = function () {
-    if (this.hidden) { return warnHidden('setPartialMatch', this); }
-    this.css.remove('match-full');
+  Elem.prototype.update = function () {
+    if (this.hidden) { return this; }
+    if ($search.hasNoText()) {
+      this.clearPatrialMatch();
+    }
+    return this;
+  };
+
+  Elem.prototype.applyPartialMatch = function () {
+    if (this.hidden) { return warnHidden('applyPartialMatch', this); }
+    if (this.partial) { return this; }
     this.css.add('match-partial');
     this.partial = true;
     return this;
   };
 
-  Elem.prototype.setFullMatch = function () {
-    if (this.hidden) { return warnHidden('setFullMatch', this); }
+  Elem.prototype.clearPatrialMatch = function () {
+    if (this.hidden || !this.partial) { return this; }
     this.css.remove('match-partial');
-    this.css.add('match-full');
     this.partial = false;
     return this;
   };
@@ -551,15 +590,140 @@ Elem = (function (){
 })();
 
 Command = (function () {
-  function Command() {
-
-    Elem.call(this, 'command', []);
+  function Command(commandData) {
+    var span = document.createElement('span');
+    this.h3 = document.createElement('h3');
+    this.h3.textContent = commandData.key;
+    span.textContent = commandData.description;
+    this.key = $match.toBlock($ez.capitalize(commandData.key));
+    Elem.call(this, 'command', [this.h3, span]);
   }
 
   Command.prototype = Object.create(Elem.prototype);
 
+  Command.prototype.compare = function (elem) {
+    if (this.type !== elem.type) { return 0; }
+    return this.key.str - elem.key.str;
+  };
+
+  Command.prototype.update = function (pattern) {
+    if ($search.hasNoText()) {
+      this.h3.innerHTML = '<i>/</i>'+ this.key.str;
+    } else {
+      this.h3.innerHTML = '<i>/</i>'+ this.key.result;
+    }
+  };
+
+  Command.prototype.match = function (pattern) {
+    this.score = this[$match[$state.matchType](this.key, pattern)
+      ? 'clearPatrialMatch'
+      : 'applyPartialMatch'
+    ]().key.score;
+    return this;
+  };
+
   return Command;
 })();
+
+$chromePageLink = (function () {
+  return [
+    "accessibility",
+    "appcache-internals",
+    "apps",
+    "blob-internals",
+    "bookmarks",
+    "cache",
+    "components",
+    "conflicts",
+    "copresence",
+    "crashes",
+    "device-log",
+    "devices",
+    "dns",
+    "downloads",
+    "extensions",
+    "flags",
+    "flash",
+    "gcm-internals",
+    "gpu",
+    "help",
+    "histograms",
+    "history",
+    "indexeddb-internals",
+    "inspect",
+    "invalidations",
+    "local-state",
+    "media-internals",
+    "memory-internals",
+    "memory-redirect",
+    "nacl",
+    "net-internals",
+    "newtab",
+    "omnibox",
+    "password-manager-internals",
+    "plugins",
+    "policy",
+    "predictors",
+    "print",
+    "profiler",
+    "quota-internals",
+    "settings",
+    "serviceworker-internals",
+    "signin-internals",
+    "sync-internals",
+    "suggestions",
+    "system",
+    "terms",
+    "thumbnails",
+    "tracing",
+    "translate-internals",
+    "user-actions",
+    "view-http-cache",
+    "version",
+    "voicesearch",
+    "webrtc-internals",
+    "webrtc-logs",
+  ].map(function (key) {
+    return "chrome://"+ key +"/";
+  });
+  // chrome://favicon/size/16@1x/
+  // chrome.history.search({text:'', endTime: Date.now() - 86400000 }, function (res) { console.log(res); });
+});
+
+$commandList = [
+  {
+    key: "history",
+    favIconUrl: "chrome://favicon/size/16@1x/chrome://history",
+    description: "Open tab from recent history",
+    action: function () {
+      console.log('history');
+    },
+  }, {
+    key: "chrome",
+    favIconUrl: "chrome://favicon/size/16@1x/",
+    description: 'List all "chrome://" links',
+    init: function () { },
+    action: function () {
+      console.log('chrome');
+    },
+  }, {
+    key: "settings",
+    favIconUrl: "chrome://favicon/size/16@1x/chrome://settings",
+    description: "Configure this panel settings and change shortcuts",
+    action: function () {
+      console.log('settings');
+    },
+  }, {
+    key: "bookmarks",
+    favIconUrl: "chrome://favicon/size/16@1x/",
+    description: "Open tab from your bookmarks",
+    action: function () {
+      console.log('bookmarks');
+    },
+  },
+];
+
+
 
 Pagelink = (function () {
   function Pagelink() {
@@ -573,9 +737,11 @@ Pagelink = (function () {
 })();
 
 Setting = (function () {
-  function Setting() {
+  function Setting(name) {
 
-    Elem.call(this, 'setting', []);
+    var h3 = document.createElement('h3');
+    h3.textContent = name;
+    Elem.call(this, 'setting', [h3]);
   }
 
   Setting.prototype = Object.create(Elem.prototype);
@@ -659,14 +825,16 @@ Tab = (function () {
             + match(this.pathname, pattern)
             + match(this.title, pattern);
 
-    this[(ret) ? 'setFullMatch' : 'setPartialMatch']();
-    this.score = this.hostname.score * 2
+    this[(ret) ? 'clearPatrialMatch' : 'applyPartialMatch']();
+    this.score = this.hostname.score
                + this.pathname.score
-               + this.title.score;
+               + this.title.score * 2;
+    return this;
   };
 
   Tab.prototype.setFavIcon = function (newFavIcons) {
     _favIcons = newFavIcons;
+    return this;
   };
 
   Tab.prototype.generateFavIcon = function () {
@@ -761,6 +929,7 @@ Tab = (function () {
 List = (function () {
   var _elemArray = [],
       _list = document.getElementById('list'),
+      _selectedType = 'none',
       _active = -1;
 
   // Scroll to element if necessary
@@ -778,19 +947,32 @@ List = (function () {
   }
 
   function activeNext() {
-    var len = _elemArray.length - 1;
-    while (_active < len) {
-      _active++;
-      if (!_elemArray[_active].hidden) {
-        scrollTo(_elemArray[_active].activate().buttonHTML);
+    var len = _elemArray.length, i = _active;
+    while (i++ < len) {
+      if (!_elemArray[i].hidden) {
+        _active = i;
+        scrollTo(_elemArray[i].activate().buttonHTML);
         return;
       }
     }
   }
 
   function activePrevious() {
-    while (_active > 1) {
-      _active--;
+    var i = _active;
+    while (--i >= 0) {
+      if (!_elemArray[i].hidden) {
+        _active = i;
+        scrollTo(_elemArray[i].activate().buttonHTML);
+        return;
+      }
+    }
+  }
+
+  function activeFirst() {
+    var len = _elemArray.length;
+    _active = -1;
+    while (_active < len) {
+      _active++;
       if (!_elemArray[_active].hidden) {
         scrollTo(_elemArray[_active].activate().buttonHTML);
         return;
@@ -834,7 +1016,7 @@ List = (function () {
       elem = contentArray[i];
       _elemArray[i] = new elem.type(elem.data);
     }
-    this.sort();
+    this.show('tab').sort();
     i = -1;
     while (++i < len) {
       _list.appendChild(_elemArray[i].buttonHTML);
@@ -845,19 +1027,27 @@ List = (function () {
       Tab.prototype.setFavIcon(newFavIcons);
       forEach('generateFavIcon');
     });
-    _active = 0;
+    activeFirst();
     _elemArray[0].activate();
-    this.show('tab');
   };
 
   List.prototype.selectMatched = function () {
-    if ($search.isEmpty()) {
+    if ($search.hasNoText()) {
       forEach('select');
     } else {
       forEachTest('select', 'partial', false);
     }
-    return this;
+    return this.updateBadge();
   };
+
+  List.prototype.updateBadge = function () {
+    if ($state.isSelecting()) {
+      $ez.setBadge(this.count('selected', true));
+    } else {
+      $ez.setBadge(this.count('partial', false));
+    }
+    return this;
+  }
 
   List.prototype.hasSelectedElement = function () {
     var i = -1; len = _elemArray.length;
@@ -869,23 +1059,35 @@ List = (function () {
     return false;
   }
 
+  List.prototype.count = function (key, value) {
+    var i = -1; len = _elemArray.length, count = 0;
+    while (++i < len) {
+      if (!_elemArray[i].hidden && _elemArray[i][key] === value) {
+        count++;
+      }
+    }
+    return count;
+  }
+
   List.prototype.show = function (type) {
+    if (!type || type === _selectedType) { return this; }
+    _selectedType = type;
     var i = -1; len = _elemArray.length;
     while (++i < len) {
-      _elemArray[i].show(type);
+      _elemArray[i].show(_selectedType);
     }
-    return false;
+    return this;
   }
 
   List.prototype.toggleActiveSelection = function () {
     var activeElem = _elemArray[_active];
-    if (!activeElem) { return; }
     if (activeElem.selected) {
       activeElem.unselect();
     } else {
       activeElem.select();
     }
-    return this;
+    $state.setSelectingState(this.hasSelectedElement());
+    return this.updateBadge();
   };
 
   List.prototype.render = function () {
@@ -897,19 +1099,30 @@ List = (function () {
         _list.insertBefore(elem.buttonHTML, btn);
       }
     }
+    activeFirst();
     return this;
   }
 
   List.prototype.refresh = function () {
     forEach('update');
-    return this;
+    forEach('clearPatrialMatch');
+    return this.updateBadge();
   }
 
   List.prototype.update = function (pattern) {
     if ($search.isEmpty()) {
       $search.valid();
-      forEach('setFullMatch');
-      return this.sort().refresh().render();
+      return this.show('tab').sort().refresh().render();
+    }
+
+    if (pattern[0] === '/') {
+      this.show('command');
+      if (pattern.length === 1) {
+        return this.sort().refresh().render();
+      }
+      pattern = pattern.slice(1);
+    } else {
+      this.show('tab');
     }
 
     var i = -1, len = _elemArray.length, noMatch = true;
@@ -917,8 +1130,8 @@ List = (function () {
     pattern = $match.normalize(pattern).replace(/-/g, '');
     while (++i < len) {
       var elem = _elemArray[i];
-      elem.match(pattern);
-      elem.update();
+      if (elem.hidden) { continue; }
+      elem.match(pattern).update();
       if (!elem.partial) {
         noMatch = false;
       }
@@ -938,7 +1151,7 @@ List = (function () {
     _elemArray.sort(function (a, b) {
       return a[sortMethod](b);
     })
-    return this;
+    return this.updateBadge();
   };
 
   List.prototype.clear = function () {
@@ -973,7 +1186,6 @@ List = (function () {
     if (_active === -1) { return; }
     event.preventDefault();
     this.toggleActiveSelection();
-    $state.setSelectingState(this.hasSelectedElement());
   };
 
   List.prototype[$state.opts.key.enter] = function (event) {
@@ -981,9 +1193,14 @@ List = (function () {
   };
 
   List.prototype[$state.opts.key.cancel] = function (event) {
-    if ($state.isSelecting()) {  
+    if (_selectedType === 'command') {
+      $search.clear();
+      this.sort().refresh().render();
+      event.preventDefault();
+    } else if ($state.isSelecting()) {  
       forEach('unselect');
       $state.setSelectingState(false);
+      this.updateBadge();
       event.preventDefault();
     }
   };
@@ -1008,27 +1225,46 @@ List = (function () {
   return List;
 })();
 
+function toType(Type, elemArray) {
+  return elemArray.map(function (elem) {
+    return { type: Type, data: elem };
+  });
+}
+
 function setInfo(bgInfo) {
   $state.setWindowId(bgInfo.currentTab.windowId);
+  $ez.setTabId(bgInfo.currentTab.id);
   $match = Match($state.opts.match);
-  $list = new List(bgInfo.tabs.map(function (tab) {
-    return { type: Tab, data: tab };
-  }));
-  $search.init($list).focus();
+  $list = new List(toType(Tab, bgInfo.tabs).concat(toType(Command, $commandList)));
+  $search.init($list, bgInfo.lastPattern).focus();
   $list.update();
+  setInterval($search.update, 35);
 }
 
 // Start it all !
 function init() {
+  var _isOpen = false;
   chrome.runtime.onMessage.addListener(function (req, sender) {
     if (req.type === "data") {
       setInfo(req.data);
+      if (_isOpen) {
+        window.close();
+      }
+      _isOpen = true;
     }
   });
+
   chrome.runtime.sendMessage({type: 'loadPopup'});
 
-  // Start the update
-  setInterval($search.update, 35);
+  addEventListener("unload", function (event) {
+    var bgPage = chrome.extension.getBackgroundPage();
+    if ($state.opts.alwaysShowBadge) {
+      bgPage.setBadgeCount(List.prototype.count('type', 'tab'));
+    } else {
+      bgPage.clearBadge();
+    }
+    bgPage.setLastPattern($search.getPattern());
+  }, true);
 }
 
 init();

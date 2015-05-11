@@ -4,8 +4,10 @@
 
 var _currentTab = { id: -1, windowId: -1 };
 var _switcher = null;
+var _lastPattern = '';
 var _opts = {
   disableBackward: false,
+  alwaysShowBadge: false,
   hideIncognito: true,
   allWindows: true,
   mod: 'altKey',
@@ -115,6 +117,7 @@ TabInfo = (function () {
   function getDefaultTimeInfo() { return { time: 0, fresh: false }; }
   return {
     add: function (tab) {
+      setBadgeCount('+');
       _openInfo[(tab.tabId || tab.id)] = {
         time: Date.now(),
         fresh: true
@@ -133,6 +136,7 @@ TabInfo = (function () {
     },
     update: updateFavIcon,
     cleanup: function (tab) {
+      setBadgeCount('-');
       // for now, no clean up :D
       // let's be messy hehehe like lionel messi
     },
@@ -161,6 +165,7 @@ var TabList = (function () {
     if (wrongType(callback, 'function')) { return; }
     chrome.tabs.query({}, function (tabArray) {
       var returnArray = [], i, tab, len = tabArray.length;
+      setBadgeCount(len);
       for (i = 0; i < len; i++) {
         tab = tabArray[i];
         if (tab.id !== _currentTab.id) {
@@ -332,7 +337,8 @@ chrome.tabs.onRemoved.addListener(TabInfo.cleanup);
       type: 'data',
       data: {
         'tabs': tabs,
-        'currentTab': _currentTab
+        'currentTab': _currentTab,
+        'lastPattern': _lastPattern
       }
     });
   }
@@ -351,6 +357,9 @@ chrome.tabs.onRemoved.addListener(TabInfo.cleanup);
   });
 })();
 
+function setLastPattern(pattern) {
+  _lastPattern = pattern;
+}
 
 /*******************************************************************************
  * Commands and Shortcuts
@@ -412,8 +421,36 @@ chrome.commands.getAll(function (commands) {
  ******************************************************************************/
 
 chrome.tabs.query({}, function (tabArray) {
+  setBadgeCount(tabArray.length);
   tabArray.forEach(TabInfo.update);
 });
+
+
+/*******************************************************************************
+ * Handle button tab count
+ ******************************************************************************/
+
+function clearBadge(tabId) {
+  console.log('clearBadge');
+  chrome.browserAction.setBadgeText({ text: ''});
+}
+
+var setBadgeCount = (function () {
+  var _count = 0;
+  return function (value) {
+    if (!_opts.alwaysShowBadge) { return; }
+    if (typeof value === "string") {
+      _count = (value === '-') ? Math.max(_count - 1, 0) : _count + 1;
+      if (_count > 100) { return; }
+    } else if (typeof value === "number") {
+      _count = value;
+    } else { return; }
+    chrome.browserAction.setBadgeText({
+      text: (_count > 99) ? "99+" : _count.toString()
+    });
+  }
+})();
+chrome.browserAction.setBadgeBackgroundColor({ color: [100, 100, 100, 255] });
 
 
 /*******************************************************************************
