@@ -10,7 +10,6 @@
   var regexp = /(^| )icon( |$)/i;
 
   function testUrl(url, success, fallback) {
-    console.log('testing for', url);
     faviconState = 'checking';
     var img = new Image();
     img.src = url;
@@ -36,6 +35,7 @@
     if (regexp.test(links[i].rel)) {
       favIconFound = true;
       icon = links[i];
+      if (icon.href.indexOf("data:") === 0) { return; }
       if (icon.href === domainFaviconUrl) {
         testDomain();
       } else {
@@ -55,7 +55,6 @@
   }
 
   chrome.runtime.onMessage.addListener(function (dataUrl, req, callback) {
-    console.log(icon, faviconState);
     if (faviconState !== 'loaded') {
       if (faviconState === 'failed') {
         icon.href = dataUrl;

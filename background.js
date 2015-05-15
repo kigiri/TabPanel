@@ -431,7 +431,6 @@ chrome.tabs.query({}, function (tabArray) {
  ******************************************************************************/
 
 function clearBadge(tabId) {
-  console.log('clearBadge');
   chrome.browserAction.setBadgeText({ text: ''});
 }
 
