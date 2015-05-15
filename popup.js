@@ -1,19 +1,61 @@
 ﻿var $ez, $list, $state, $search, $match, $commandList,
     Elem, Tab, Setting, Pagelink, Command, List, Match;
 
+var _stored = {}, _indent = '', _prevEndl, __debug__ = true;
+function stackLog(msg) {
+  if (!__debug__) { return; }
+  var name = arguments.callee.caller.name,
+      now = window.performance.now();
+  if (!_stored[name]) {
+    _stored[name] = {
+      now: now,
+      count: 0,
+    };
+    if (msg) {
+      console.log(_indent +'%c'+ name, 'color: #bada55', msg);     
+    } else {
+      console.log(_indent +'%c'+ name, 'color: #bada55');
+    }
+    _indent += '| ';
+  } else {
+    _indent = _indent.slice(0, -2);
+    console.log(_indent +'└> '+ (now - _stored[name].now).toFixed(3) +'ms');
+    _stored[name] = null;
+  }
+}
+
 $ez = (function () {
   var _tabId
   var setBadge = (function () {
     var _prevCount = -1
     return function (count) {
-      if (_prevCount === count || _tabId === undefined) { return; }
+      if (_prevCount === count || _tabId === undefined || typeof count !== "number") { return; }
       _prevCount = count;
       chrome.browserAction.setBadgeText({
         text: (count > 99) ? "99+" : count.toString(),
       });
     };
   })();
+
+
   return {
+    throttle: function (_fn, _retryTime, _this) {
+      var _running = false, _waiting = false;
+
+      function throttledFn() {
+        if (_running && !_waiting) {
+          setTimeout(throttledFn, _retryTime);
+          _waiting = true;
+        } else {
+          _running = true;
+          _fn.call(_this);
+          _running = false;
+          _waiting = false;
+        }
+      }
+
+      return throttledFn;
+    },
     getTabId: function () {
       return _tabId;
     },
@@ -113,8 +155,8 @@ Match = (function (opts) {
     'ẕ': 'z', 'ᵶ': 'z', 'ᶎ': 'z', 'ʐ': 'z', 'ƶ': 'z', 'ɀ': 'z', 'ₐ': 'a',
     'ₑ': 'e', 'ᵢ': 'i', 'ⱼ': 'j', 'ₒ': 'o', 'ᵣ': 'r', 'ᵤ': 'u', 'ᵥ': 'v',
     'ₓ': 'x', '.': '*', ',': ' ', ':': ' ', ';': ' ', '[': ' ', ']': ' ',
-    '(': ' ', ')': ' ', '{': ' ', '}': ' ', ' ': ' ', '-': '*', '_': ' ',
-    '&': '*', '|': '*', '=': '*', '*': '*', '+': '+', "'": '*', '"': '*',
+    '(': ' ', ')': ' ', '{': ' ', '}': ' ', ' ': ' ', '-': '-', '_': ' ',
+    '&': '&', '|': '*', '=': '=', '*': '*', '+': '+', "'": "'", '"': '*',
     '/': '*', '<': '*', '>': '*', '#': '#', '\\': '*'
   };
 
@@ -169,7 +211,7 @@ Match = (function (opts) {
     };
   }
 
-  function fuzzy(str, pattern, s, p, score, bonus, matched, deepness, last) {
+  function fuzzy(str, pattern, s, p, score, bonus, matched, last) {
     // End of the pattern, successfull match
     if (p >= pattern.length) {
       return makeMatchObject(score + (s >= str.length), matched, false);
@@ -185,31 +227,28 @@ Match = (function (opts) {
     var lowerC = c.toLowerCase();
     if (lowerC === pattern[p]) {
       // Look a head to find best possible match
-      var altMatch;
-      if (deepness > 0) {
-        altMatch = fuzzy(str, pattern, s+1, p, score, 0, matched.slice(), deepness - 1, last);
-      }
+      var altMatch = fuzzy(str, pattern, s+1, p, score, 0, matched.slice(), last);
 
       // Store current match and calculate bonus
       matched.push(s);
 
       // Bonus for capitals
-      if (s <= 0) {
-        score += ((len - s - last) / len) * (c === lowerC ? 1 : 4) + bonus;
-      } else {
+      // if (s <= 0) {
+        // score += ((len - s - last) / len) * (c === lowerC ? 1 : 4) + bonus;
+      // } else {
         score += (c === lowerC ? 1 : 4) + bonus;
-      }
+      // }
       bonus += 5;
-      var match = fuzzy(str, pattern, s+1, p+1, score, bonus, matched, deepness, s);
+      var match = fuzzy(str, pattern, s+1, p+1, score, bonus, matched, s);
       // Return the best score
-      return (!altMatch || altMatch.score <= match.score) ? match : altMatch;
+      return (altMatch.score <= match.score) ? match : altMatch;
     } else {
       // TODO: If we don't have any bonus, this could be an inverted type
       // try to match previous char with current and current with previous
 
       // If nothing matched, recalculate bonus
       bonus = (c === '*' || c === ' ') ? 3 : 0;
-      return fuzzy(str, pattern, s+1, p, score, bonus, matched, deepness, last);
+      return fuzzy(str, pattern, s+1, p, score, bonus, matched, last);
     }
   }
 
@@ -322,7 +361,7 @@ Match = (function (opts) {
     },
 
     fuzzy: function (block, pattern) {
-      var bestMatch = fuzzy(block.normalized, pattern, 0, 0, 0, 8, [], 6, -1);
+      var bestMatch = fuzzy(block.normalized, pattern.replace(/\s/g, ""), 0, 0, 0, 8, [], 6, -1);
       block.score = bestMatch.score; // += ?
       block.result = renderIndexArray(bestMatch.matched, block.str);
       return bestMatch.partial ? 0 : 1;
@@ -392,6 +431,26 @@ $search = (function () {
       _list,
       _input = document.getElementById("search");
 
+  function update() {
+    var pattern = _input.value;
+    if (_prevInputValue !== pattern) {
+      _prevInputValue = pattern;
+      _list.update(pattern);
+    }
+    return Search;
+  }
+
+  function preUpdate() {
+    if (_prevInputValue !== _input.value) {
+      _canRestore = false;
+      _input.placeholder = '';
+      _prevInputValue = _input.value;
+      _list.update(_input.value);
+      Search.update = update;
+    }
+    return Search;
+  }
+
   var Search = {
     isEmpty: function () { return !_prevInputValue; },
     hasNoText: function () {
@@ -408,14 +467,7 @@ $search = (function () {
     getPattern: function () {
       return _input.value;
     },
-    update: function () {
-      var pattern = _input.value
-      if (_prevInputValue !== pattern) {
-        _prevInputValue = pattern;
-        _list.update(pattern);
-      }
-      return Search;
-    },
+    update: preUpdate,
     valid: function () {
       _input.classList.remove('invalid');
       return Search;
@@ -439,25 +491,59 @@ $search = (function () {
       _input.focus();
       return Search;
     },
+    restorePrevious: function () {
+      return Search;
+    },
     select: function () {
       _input.select();
       return Search;
     },
     init: function (list, lastPattern) {
+      var keyState = {};
+      var canRestore = true;
+      var whiteList = [
+        $state.opts.key.move,
+        $state.opts.key.select,
+        $state.opts.key.up,
+        $state.opts.key.down
+      ];
+
       if (!(list instanceof List)) {
         console.error('list argument isn\'t a List instance');
         return null;
       }
       _list = list;
+      _input.onpaste = function () {
+        setTimeout(Search.update);
+      };
+      _input.onkeyup = function (event) {
+        keyState[event.keyCode] = false;
+      };
       _input.onkeydown = function (event) {
-        if (_list[event.keyCode] instanceof Function) {
-          _list[event.keyCode](event);
+        var keyCode = event.keyCode;
+        if (keyState[keyCode]
+          && (keyCode < 33 && keyCode > 40)
+          && whiteList.indexOf(keyCode) === -1) {
+          event.preventDefault();
+          return;
+        }
+        keyState[keyCode] = true;
+        console.log('onkeydown', keyCode);
+        if (_list[keyCode] instanceof Function) {
+          _list[keyCode](event);
         } else if ($state.isSelecting()) {
           _list.forEachSelected($ez.getEventKey(event));
           event.preventDefault();
         }
+        if (canRestore && keyCode === 39) {
+          _input.value = _input.placeholder;
+          _input.placeholder = '';
+          setTimeout(_input.select.bind(_input));
+          canRestore = false;
+        }
+        setTimeout(Search.update);
       };
-      _input.value = lastPattern;
+      _input.placeholder = lastPattern;
       return Search;
     }
   };
@@ -515,7 +601,6 @@ Elem = (function (){
   })();
 
   Elem.prototype.activate = (function () {
-    if (this.hidden) { return warnHidden('activate', this); }
     var _previousActive = { elemId: null };
     return function () {
       if (this.elemId === _previousActive.elemId) { return this; }
@@ -535,12 +620,10 @@ Elem = (function (){
   Elem.prototype.rightClick = function () { return this; };
 
   Elem.prototype.compare = function (elem) {
-    if (this.hidden) { return 1; }
     return this.elemId - elem.elemId;
   };
 
   Elem.prototype.byScore = function (elem) {
-    if (this.hidden) { return 1; }
     if (elem.partial && !this.partial) { return -1; }
     if (this.partial && !elem.partial) { return  1; }
     if (elem.score !== this.score) { return elem.score - this.score; }
@@ -559,7 +642,6 @@ Elem = (function (){
   };
 
   Elem.prototype.update = function () {
-    if (this.hidden) { return this; }
     if ($search.hasNoText()) {
       this.clearPatrialMatch();
     }
@@ -567,7 +649,6 @@ Elem = (function (){
   };
 
   Elem.prototype.applyPartialMatch = function () {
-    if (this.hidden) { return warnHidden('applyPartialMatch', this); }
     if (this.partial) { return this; }
     this.css.add('match-partial');
     this.partial = true;
@@ -575,21 +656,19 @@ Elem = (function (){
   };
 
   Elem.prototype.clearPatrialMatch = function () {
-    if (this.hidden || !this.partial) { return this; }
+    if (!this.partial) { return this; }
     this.css.remove('match-partial');
     this.partial = false;
     return this;
   };
 
   Elem.prototype.select = function () {
-    if (this.hidden) { return warnHidden('select', this); }
     this.selected = true;
     this.css.add('selected');
     return this;
   };
 
   Elem.prototype.unselect = function () {
-    if (this.hidden) { return warnHidden('unselect', this); }
     this.selected = false;
     this.css.remove('selected');
     return this;
@@ -777,7 +856,6 @@ Tab = (function () {
 
   var Tab = function (tab) {
     var url;
-
     // init default values
     this.selected = false;
 
@@ -787,9 +865,10 @@ Tab = (function () {
     }.bind(this));
 
     // Prepare URL and Title
-    url = (this.url.match(/(^\S+\/\/)([^\/]+)(.+)/) || ['','', this.url,'/']);
-    this.hostname = $match.toBlock(url[2]);
-    this.pathname = $match.toBlock(url[3]);
+    url = new URL(this.url);
+    this.hostname = $match.toBlock(url.hostname);
+    this.pathname = $match.toBlock(url.pathname);
+    this.urlFragments = '<s>'+ url.search + url.hash +'</s>';
     this.title = $match.toBlock(this.title);
 
     // Generate Children
@@ -820,12 +899,16 @@ Tab = (function () {
     if ($search.isEmpty()) {
       this.h3.innerHTML = this.title.str;
       this.span.innerHTML = '<i>'+ this.hostname.str
-                          +'</i>'+ this.pathname.str;
+                          +'</i>'+ this.pathname.str
+                          + this.urlFragments;
+      this.clearPatrialMatch();
     } else {
       this.h3.innerHTML = this.title.result;
       this.span.innerHTML = '<i>'+ this.hostname.result
-                          +'</i>'+ this.pathname.result;
+                          +'</i>'+ this.pathname.result
+                          + this.urlFragments;
     }
+    return this;
   };
 
   Tab.prototype.match = function (pattern) {
@@ -921,9 +1004,10 @@ Tab = (function () {
   Tab.prototype.close = function (callback) {
     chrome.tabs.remove(this.id, (callback || $ez.emptyFallback));
     this.buttonHTML.remove();
+    this.buttonHTML = null;
   };
 
-  // KeyCode handlers
+  // KeyCode handlers, return true to refresh the list
   Tab.prototype[$state.opts.key.move] = function () {  // key M
     this.move($state.getWindowId());
   };
@@ -1008,33 +1092,59 @@ List = (function () {
     return null;
   }
 
-  function forEach(key) {
-    var i = -1, len = _elemArray.length;
+  function eachVisible(key) {
+    var i = -1, len = _elemArray.length, elem;
     while (++i < len) {
-      if (_elemArray[i][key] instanceof Function) {
-        _elemArray[i][key]();
+      elem = _elemArray[i];
+      if (!elem.hidden && elem[key] instanceof Function) {
+        elem[key]();
       }
     }
   }
 
-  function forEachTest(key, test, value) {
-    var i = -1, len = _elemArray.length, val;
+  function eachTest(key, test, value) {
+    var i = -1, len = _elemArray.length, elem;
     while (++i < len) {
-      val = _elemArray[i];
-      if (val[test] === value && val[key] instanceof Function) {
-        val[key]();
+      elem = _elemArray[i];
+      if (elem[test] === value && elem[key] instanceof Function) {
+        elem[key]();
       }
+    }
+  }
+
+  function eachVisibleTest(key, test, value) {
+    var i = -1, len = _elemArray.length, elem;
+    while (++i < len) {
+      elem = _elemArray[i];
+      if (!elem.hidden
+          && elem[test] === value
+          && elem[key] instanceof Function) {
+        elem[key]();
+      }
+    }
+  }
+
+  function keyExtendedAction(key) {
+    switch (key) {
+      case 'close':
+      case $state.opts.key.close:
+        _elemArray = _elemArray.filter(removeDeleted);
+        this.render('byScore');
+      break;
+      default: break;
     }
   }
 
   var List = function (contentArray) {
     var i = -1, len = contentArray.length, elem;
+
+    this.update = $ez.throttle(update, 5, this);
     _elemArray = Array(len);
     while (++i < len) {
       elem = contentArray[i];
       _elemArray[i] = new elem.type(elem.data);
     }
-    this.show('tab').sort();
+    this.show('tab').sort('compare');
     i = -1;
     while (++i < len) {
       _list.appendChild(_elemArray[i].buttonHTML);
@@ -1043,60 +1153,74 @@ List = (function () {
       type: 'loadFavIcons'
     }, function (newFavIcons) {
       Tab.prototype.setFavIcon(newFavIcons);
-      forEach('generateFavIcon');
+      eachTest('generateFavIcon', 'type', 'tab');
     });
     activeFirst(false);
   };
 
-  List.prototype.selectMatched = function () {
+  function removeDeleted(elem) {
+    return (elem.buttonHTML !== null);
+  }
+
+  List.prototype.selectMatched = function selectMatched() {
+    stackLog();
     if ($search.hasNoText()) {
-      forEach('select');
+      eachVisible('select');
     } else {
-      forEachTest('select', 'partial', false);
+      eachVisibleTest('select', 'partial', false);
     }
+    stackLog();
     return this.updateBadge();
   };
 
-  List.prototype.updateBadge = function () {
+  List.prototype.updateBadge = function updateBadge() {
+    stackLog();
     if ($state.isSelecting()) {
       $ez.setBadge(this.count('selected', true));
     } else {
       $ez.setBadge(this.count('partial', false));
     }
+    stackLog();
     return this;
   }
 
-  List.prototype.hasSelectedElement = function () {
+  List.prototype.hasSelectedElement = function hasSelectedElement() {
+    stackLog();
     var i = -1; len = _elemArray.length;
     while (++i < len) {
       if (_elemArray[i].selected) {
+        stackLog();
         return true;
       }
     }
+    stackLog();
     return false;
-  }
+  };
 
   List.prototype.count = function (key, value) {
-    var i = -1; len = _elemArray.length, count = 0;
+    var i = -1; len = _elemArray.length, total = 0;
     while (++i < len) {
       if (!_elemArray[i].hidden && _elemArray[i][key] === value) {
-        count++;
+        total++;
       }
     }
-    return count;
-  }
+    return total;
+  };
 
-  List.prototype.show = function (type) {
+  List.prototype.show = function show(type) {
     if (!type || type === _selectedType) { return this; }
+    stackLog();
     _selectedType = type;
     var i = -1; len = _elemArray.length;
     while (++i < len) {
       _elemArray[i].show(_selectedType);
     }
+    stackLog();
     return this;
-  }
+  };
 
-  List.prototype.toggleActiveSelection = function () {
+  List.prototype.toggleActiveSelection = function toggleActiveSelection() {
+    stackLog();
     var activeElem = _elemArray[_active];
     if (activeElem.selected) {
       activeElem.unselect();
@@ -1104,12 +1228,23 @@ List = (function () {
       activeElem.select();
     }
     $state.setSelectingState(this.hasSelectedElement());
-    return this.updateBadge();
+    this.updateBadge();
+    stackLog();
+    return this;
   };
 
   // call to apply sorted array to the dom
-  List.prototype.render = function () {
-    var i = -1, len = _elemArray.length, elem, btn, buttons = _list.childNodes;
+  List.prototype.render = function render(sortMethod) {
+    stackLog();
+    this.sort(sortMethod);
+    eachVisible('update');
+    this.updateBadge();
+    var i = -1,
+        len = _elemArray.length,
+        elem,
+        btn,
+        cleanupArray = [],
+        buttons = _list.childNodes;
     while (++i < len) {
       elem = _elemArray[i];
       btn = buttons[i];
@@ -1118,25 +1253,26 @@ List = (function () {
       }
     }
     activeFirst();
+    stackLog();
     return this;
   }
 
-  List.prototype.refresh = function () {
-    forEach('update');
-    forEach('clearPatrialMatch');
-    return this.updateBadge();
-  }
-
-  List.prototype.update = function (pattern) {
+  // added on list initialisation
+  function update(pattern) {
+    console.timeEnd('list update');
+    console.time('list update');
+    stackLog();
     if ($search.isEmpty()) {
       $search.valid();
-      return this.show('tab').sort().refresh().render();
+      stackLog();
+      return this.show('tab').render();
     }
-
+    pattern = $search.getPattern();
     if (pattern[0] === '/') {
       this.show('command');
       if (pattern.length === 1) {
-        return this.sort().refresh().render();
+        stackLog();
+        return this.render();
       }
       pattern = pattern.slice(1);
     } else {
@@ -1145,7 +1281,7 @@ List = (function () {
 
     var i = -1, len = _elemArray.length, noMatch = true;
 
-    pattern = $match.normalize(pattern).replace(/-/g, '');
+    pattern = $match.normalize(pattern).replace(/\s/g, '');
     while (++i < len) {
       var elem = _elemArray[i];
       if (elem.hidden) { continue; }
@@ -1158,45 +1294,47 @@ List = (function () {
       // set class no match on input
       $search.invalid();
     } else {
-      this.sort('byScore').render();
+      this.render('byScore');
       $search.valid();
     }
+    stackLog();
     return this;
   };
 
-  List.prototype.sort = function (sortMethod) {
+  List.prototype.sort = function sort(sortMethod) {
+    stackLog();
     sortMethod = (sortMethod || 'compare');
     _elemArray.sort(function (a, b) {
       return a[sortMethod](b);
     })
-    return this.updateBadge();
+    stackLog();
+    return this;
   };
 
-  List.prototype.clear = function () {
+  List.prototype.clear = function clear() {
+    stackLog();
     while (_list.hasChildNodes()) {
       _list.removeChild(_list.lastChild);
     }
+    stackLog();
     return this;
   };
 
-  List.prototype.activate = function (elemId) {
-    forEachTest('activate', 'elemId', elemId);
+  List.prototype.activate = function activate(elemId) {
+    stackLog();
+    eachVisibleTest('activate', 'elemId', elemId);
+    stackLog();
     return this;
   };
 
-  List.prototype.open = function (elemId) {
-    forEachTest('open', 'elemId', elemId);
+  List.prototype.open = function open(elemId) {
+    eachVisibleTest('open', 'elemId', elemId);
     return this;
   };
 
-  List.prototype.remove = function (elemId) {
-    forEachTest('close', 'elemId', elemId);
-    return this;
-  };
-
-  List.prototype.forEachSelected = function (key) {
-    console.log('forEachSelected: key =', key);
-    forEachTest(key, 'selected', true);
+  List.prototype.forEachSelected = function forEachSelected(key) {
+    eachVisibleTest(key, 'selected', true);
+    keyExtendedAction.call(this, key);
     return this;
   };
 
@@ -1213,10 +1351,10 @@ List = (function () {
   List.prototype[$state.opts.key.cancel] = function (event) {
     if (_selectedType === 'command') {
       $search.clear();
-      this.sort().refresh().render();
+      this.render();
       event.preventDefault();
     } else if ($state.isSelecting()) {  
-      forEach('unselect');
+      eachVisible('unselect');
       $state.setSelectingState(false);
       this.updateBadge();
       event.preventDefault();
@@ -1258,7 +1396,6 @@ function setInfo(bgInfo) {
   setTimeout(function() {
     $search.select();
     $list.update();
-    setInterval($search.update, 35);
   });
 }
 
@@ -1281,6 +1418,7 @@ function init() {
     var bgPage = chrome.extension.getBackgroundPage();
     if ($state.opts.alwaysShowBadge) {
       bgPage.setBadgeCount(List.prototype.count('type', 'tab'));
+      stackLog();
     } else {
       bgPage.clearBadge();
     }
